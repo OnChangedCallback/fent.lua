@@ -1,0 +1,278 @@
+-- Переменные (согласно правилам пользователя)
+-- Services
+local game = game
+local workspace = workspace
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
+
+-- Players
+local LocalPlayer = Players.LocalPlayer
+
+-- Math
+local random, huge = math.random, math.huge
+local floor, ceil = math.floor, math.ceil
+local abs, sqrt = math.abs, math.sqrt
+local sin, cos = math.sin, math.cos
+
+-- Table
+local insert, remove = table.insert, table.remove
+local sort, concat = table.sort, table.concat
+
+-- String
+local format, match = string.format, string.match
+local lower, upper = string.lower, string.upper
+local sub, gsub = string.sub, string.gsub
+
+-- Other
+local pairs, ipairs = pairs, ipairs
+local type, tostring = type, tostring
+local pcall, xpcall = pcall, xpcall
+local loadstring = loadstring
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+
+-- Roblox specific
+local Color3fromRGB = Color3.fromRGB
+local UDim2new = UDim2.new
+local Vector3new = Vector3.new
+local CFramenew = CFrame.new
+
+-- File system functions
+local isfolder = isfolder
+local isfile = isfile
+local listfiles = listfiles
+local writefile = writefile
+local readfile = readfile
+local delfile = delfile
+local makefolder = makefolder
+
+-- Utility библиотека
+local utility = {}
+local connections = {}
+
+-- Utility функции
+do
+    function utility.new_connection(event, callback)
+        local connection = event:Connect(callback)
+        insert(connections, connection)
+        return connection
+    end
+    
+    function utility.disconnect_all()
+        for _, connection in ipairs(connections) do
+            if connection then
+                connection:Disconnect()
+            end
+        end
+        connections = {}
+    end
+end
+
+-- Загрузка UI библиотеки
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/main"))()
+
+-- Проверка загрузки библиотеки
+if not Library then
+    warn("Failed to load UI Library")
+    return
+end
+
+-- Создание основного окна
+local Window = Library:Window({
+    Name = "Fentik.sexyy",
+    Size = UDim2.new(0, 700, 0, 670),
+    GradientTitle = {
+        Enabled = true,
+        Start = Color3.fromRGB(255, 0, 0),
+        Middle = Color3.fromRGB(255, 255, 0),
+        End = Color3.fromRGB(0, 255, 0),
+        Speed = 0.3
+    }
+})
+
+local Watermark = Library:Watermark("Fentanyl | " .. LocalPlayer.Name .. " | " .. os.date("%y.%m.%d") .. " | Premium")
+
+local KeybindList = Library:KeybindList()
+
+local RagebotPage = Window:Page({
+    Name = "Ragebot",
+    Columns = 2
+})
+
+local VisualsPage = Window:Page({
+    Name = "Visuals",
+    Columns = 2
+})
+local MiscPage = Window:Page({
+    Name = "Misc",
+    Columns = 2
+})
+local AntiAimPage = Window:Page({
+    Name = "AntiAim",
+    Columns = 2
+})
+local SettingsPage = Window:Page({
+    Name = "Settings",
+    Columns = 2
+})
+
+-- Config Manager Section
+local ConfigSection = SettingsPage:Section({
+    Name = "Config Manager",
+    Side = 1
+})
+
+-- Переменные для конфиг менеджера
+local selectedConfig = ""  -- Выбранный из дропдауна
+local newConfigName = ""   -- Введенный в текстбокс
+local configList = {}
+
+-- Создание папок если их нет
+do
+    if not isfolder("fentanyl") then
+        makefolder("fentanyl")
+    end
+    if not isfolder("fentanyl/Configs") then
+        makefolder("fentanyl/Configs")
+    end
+end
+
+-- Функция для обновления списка конфигов
+local function updateConfigList()
+    local configList = {}
+    if isfolder("fentanyl/Configs") then
+        for _, file in ipairs(listfiles("fentanyl/Configs")) do
+            -- Нормализуем пути - заменяем \ на / и убираем директорию
+            local name = file:gsub("\\", "/")
+            name = name:gsub("fentanyl/Configs/", "")
+            insert(configList, name)
+        end
+    end
+    return configList
+end
+
+-- Листбокс для выбора конфигов
+local ConfigList = ConfigSection:Listbox({
+    Name = "Select Config",
+    Items = updateConfigList(),
+    Default = "",
+    Flag = "SelectedConfig",
+    Callback = function(value)
+        selectedConfig = value
+        print("Selected config:", value)
+    end
+})
+
+-- Текстбокс для имени нового конфига
+local ConfigNameBox = ConfigSection:Textbox({
+    Name = "Config Name",
+    Default = "",
+    Placeholder = "Enter config name...",
+    Flag = "ConfigName",
+    Callback = function(value)
+        newConfigName = value
+    end
+})
+
+-- Кнопка создания конфига
+local CreateButton = ConfigSection:Button({
+    Name = "Create Config",
+    Callback = function()
+        if newConfigName and newConfigName ~= "" then
+            local configName = newConfigName:gsub("%.json$", "") .. ".json"
+            local configPath = "fentanyl/Configs/" .. configName
+            
+            if not isfile(configPath) then
+                -- Получаем данные конфига и сохраняем
+                local configData = Library:GetConfig()
+                writefile(configPath, configData)
+                Library:Notification("Config created: " .. configName, 3, Color3fromRGB(0, 255, 0))
+                ConfigList:Refresh(updateConfigList())
+            else
+                Library:Notification("Config already exists: " .. configName, 3, Color3fromRGB(255, 0, 0))
+            end
+        else
+            Library:Notification("Please enter a config name", 3, Color3fromRGB(255, 255, 0))
+        end
+    end
+})
+
+-- Кнопка сохранения конфига
+local SaveButton = ConfigSection:Button({
+    Name = "Save Config",
+    Callback = function()
+        local configName
+        if selectedConfig and selectedConfig ~= "" then
+            configName = selectedConfig
+        elseif newConfigName and newConfigName ~= "" then
+            configName = newConfigName:gsub("%.json$", "") .. ".json"
+        end
+        
+        if configName then
+            local configPath = "fentanyl/Configs/" .. configName
+            local configData = Library:GetConfig()
+            writefile(configPath, configData)
+            Library:Notification("Config saved: " .. configName, 3, Color3fromRGB(0, 255, 0))
+            ConfigList:Refresh(updateConfigList())
+        else
+            Library:Notification("Please select or enter a config name", 3, Color3fromRGB(255, 255, 0))
+        end
+    end
+})
+
+-- Кнопка загрузки конфига
+local LoadButton = ConfigSection:Button({
+    Name = "Load Config",
+    Callback = function()
+        if selectedConfig and selectedConfig ~= "" then
+            local configPath = "fentanyl/Configs/" .. selectedConfig
+            
+            if isfile(configPath) then
+                local configData = readfile(configPath)
+                Library:LoadConfig(configData)
+                Library:Notification("Config loaded: " .. selectedConfig, 3, Color3fromRGB(0, 255, 0))
+            else
+                Library:Notification("Config not found: " .. selectedConfig, 3, Color3fromRGB(255, 0, 0))
+            end
+        else
+            Library:Notification("Please select a config to load", 3, Color3fromRGB(255, 255, 0))
+        end
+    end
+})
+
+-- Кнопка удаления конфига
+local DeleteButton = ConfigSection:Button({
+    Name = "Delete Config",
+    Risky = true,
+    Callback = function()
+        if selectedConfig and selectedConfig ~= "" then
+            local configPath = "fentanyl/Configs/" .. selectedConfig
+            print("Trying to delete config at path:", configPath)
+            print("File exists:", isfile(configPath))
+            
+            if isfile(configPath) then
+                delfile(configPath)
+                Library:Notification("Config deleted: " .. selectedConfig, 3, Color3fromRGB(0, 255, 0))
+                ConfigList:Refresh(updateConfigList())
+                selectedConfig = ""
+            else
+                Library:Notification("Config not found at: " .. configPath, 5, Color3fromRGB(255, 0, 0))
+            end
+        else
+            Library:Notification("Please select a config to delete", 3, Color3fromRGB(255, 255, 0))
+        end
+    end
+})
+
+-- Кнопка обновления списка конфигов
+local RefreshButton = ConfigSection:Button({
+    Name = "Refresh Config List",
+    Callback = function()
+        ConfigList:Refresh(updateConfigList())
+        Library:Notification("Config list refreshed", 2, Color3fromRGB(0, 255, 0))
+    end
+})
