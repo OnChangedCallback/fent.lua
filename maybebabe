@@ -632,6 +632,7 @@ local Library do
         Library.Font = CustomFont:Get("Windows-XP-Tahoma")
         Library.AvailableFonts = font_sources
         Library.CurrentFontName = "Windows-XP-Tahoma"
+        Library.CustomFont = CustomFont
     end
 
     Library.Holder = Instances:Create("ScreenGui", {
@@ -777,6 +778,36 @@ local Library do
 
         TableInsert(self.ThemeItems, ThemeData)
         self.ThemeMap[Item] = ThemeData
+    end
+
+    Library.UpdateFont = function(self, newFontName)
+        -- Получаем новый шрифт
+        local newFont = self.CustomFont:Get(newFontName)
+        if not newFont then
+            return false
+        end
+
+        -- Обновляем основной шрифт библиотеки
+        self.Font = newFont
+        self.CurrentFontName = newFontName
+
+        -- Обновляем шрифт для всех текстовых элементов в интерфейсе
+        local function updateFontRecursive(instance)
+            if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
+                instance.FontFace = newFont
+            end
+            
+            for _, child in pairs(instance:GetChildren()) do
+                updateFontRecursive(child)
+            end
+        end
+
+        -- Обновляем шрифт во всех элементах интерфейса
+        if self.Holder and self.Holder.Instance then
+            updateFontRecursive(self.Holder.Instance)
+        end
+
+        return true
     end
 
     Library.GetConfig = function(self)
