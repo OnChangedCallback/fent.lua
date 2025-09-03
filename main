@@ -1,0 +1,415 @@
+-- Переменные (согласно правилам пользователя)
+-- Services
+local game = game
+local workspace = workspace
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
+
+-- Players
+local LocalPlayer = Players.LocalPlayer
+
+-- Math
+local random, huge = math.random, math.huge
+local floor, ceil = math.floor, math.ceil
+local abs, sqrt = math.abs, math.sqrt
+local sin, cos = math.sin, math.cos
+
+-- Table
+local insert, remove = table.insert, table.remove
+local sort, concat = table.sort, table.concat
+
+-- String
+local format, match = string.format, string.match
+local lower, upper = string.lower, string.upper
+local sub, gsub = string.sub, string.gsub
+
+-- Other
+local pairs, ipairs = pairs, ipairs
+local type, tostring = type, tostring
+local pcall, xpcall = pcall, xpcall
+local loadstring = loadstring
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+
+-- Roblox specific
+local Color3fromRGB = Color3.fromRGB
+local UDim2new = UDim2.new
+local Vector3new = Vector3.new
+local CFramenew = CFrame.new
+
+-- File system functions
+local isfolder = isfolder
+local isfile = isfile
+local listfiles = listfiles
+local writefile = writefile
+local readfile = readfile
+local delfile = delfile
+local makefolder = makefolder
+
+-- Utility библиотека
+local utility = {}
+local connections = {}
+
+-- Utility функции
+do
+    function utility.new_connection(event, callback)
+        local connection = event:Connect(callback)
+        insert(connections, connection)
+        return connection
+    end
+    
+    function utility.disconnect_all()
+        for _, connection in ipairs(connections) do
+            if connection then
+                connection:Disconnect()
+            end
+        end
+        connections = {}
+    end
+end
+
+-- Загрузка UI библиотеки
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/aa"))()
+
+-- Проверка загрузки библиотеки
+if not Library then
+    warn("Failed to load UI Library")
+    return
+end
+
+-- Создание основного окна
+local Window = Library:Window({
+    Name = "Fentik.sexyy",
+    Size = UDim2.new(0, 700, 0, 670),
+    GradientTitle = {
+        Enabled = false,
+        Enabled = false,
+        Start = Color3.fromRGB(255, 255, 255),
+        Middle = Color3.fromRGB(255, 255, 255),
+        End = Color3.fromRGB(255, 255, 255),
+        Speed = 0.1
+    }
+})
+
+local Watermark = Library:Watermark("Fentanyl | " .. LocalPlayer.Name .. " | " .. os.date("%y.%m.%d") .. " | Premium")
+
+local KeybindList = Library:KeybindList()
+
+local RagebotPage = Window:Page({
+    Name = "Ragebot",
+    Columns = 2
+})
+
+local VisualsPage = Window:Page({
+    Name = "Visuals",
+    Columns = 2
+})
+local MiscPage = Window:Page({
+    Name = "Misc",
+    Columns = 2
+})
+local AntiAimPage = Window:Page({
+    Name = "AntiAim",
+    Columns = 2
+})
+local SettingsPage = Window:Page({
+    Name = "Settings",
+    Columns = 2
+})
+
+-- Config Manager Section
+local ConfigSection = SettingsPage:Section({
+    Name = "Config Manager",
+    Side = 1
+})
+
+-- Переменные для конфиг менеджера
+local selectedConfig = ""  -- Выбранный из дропдауна
+local newConfigName = ""   -- Введенный в текстбокс
+local configList = {}
+
+-- Создание папок если их нет
+do
+    if not isfolder("fentanyl") then
+        makefolder("fentanyl")
+    end
+    if not isfolder("fentanyl/Configs") then
+        makefolder("fentanyl/Configs")
+    end
+end
+
+-- Функция для обновления списка конфигов
+local function updateConfigList()
+    local configList = {}
+    if isfolder("fentanyl/Configs") then
+        for _, file in ipairs(listfiles("fentanyl/Configs")) do
+            -- Нормализуем пути - заменяем \ на / и убираем директорию
+            local name = file:gsub("\\", "/")
+            name = name:gsub("fentanyl/Configs/", "")
+            insert(configList, name)
+        end
+    end
+    return configList
+end
+
+-- Листбокс для выбора конфигов
+local ConfigList = ConfigSection:Listbox({
+    Name = "Select Config",
+    Items = updateConfigList(),
+    Default = "",
+    Flag = "SelectedConfig",
+    Callback = function(value)
+        selectedConfig = value
+        print("Selected config:", value)
+    end
+})
+
+-- Текстбокс для имени нового конфига
+local ConfigNameBox = ConfigSection:Textbox({
+    Name = "Config Name",
+    Default = "",
+    Placeholder = "Enter config name...",
+    Flag = "ConfigName",
+    Callback = function(value)
+        newConfigName = value
+    end
+})
+
+-- Кнопка создания конфига
+local CreateButton = ConfigSection:Button({
+    Name = "Create Config",
+    Callback = function()
+        if newConfigName and newConfigName ~= "" then
+            local configName = newConfigName:gsub("%.json$", "") .. ".json"
+            local configPath = "fentanyl/Configs/" .. configName
+            
+            if not isfile(configPath) then
+                -- Получаем данные конфига и сохраняем
+                local configData = Library:GetConfig()
+                writefile(configPath, configData)
+                Library:Notification("Config created: " .. configName, 3, Color3fromRGB(0, 255, 0))
+                ConfigList:Refresh(updateConfigList())
+            else
+                Library:Notification("Config already exists: " .. configName, 3, Color3fromRGB(255, 0, 0))
+            end
+        else
+            Library:Notification("Please enter a config name", 3, Color3fromRGB(255, 255, 0))
+        end
+    end
+})
+
+-- Кнопка сохранения конфига
+local SaveButton = ConfigSection:Button({
+    Name = "Save Config",
+    Callback = function()
+        local configName
+        if selectedConfig and selectedConfig ~= "" then
+            configName = selectedConfig
+        elseif newConfigName and newConfigName ~= "" then
+            configName = newConfigName:gsub("%.json$", "") .. ".json"
+        end
+        
+        if configName then
+            local configPath = "fentanyl/Configs/" .. configName
+            local configData = Library:GetConfig()
+            writefile(configPath, configData)
+            Library:Notification("Config saved: " .. configName, 3, Color3fromRGB(0, 255, 0))
+            ConfigList:Refresh(updateConfigList())
+        else
+            Library:Notification("Please select or enter a config name", 3, Color3fromRGB(255, 255, 0))
+        end
+    end
+})
+
+-- Кнопка загрузки конфига
+local LoadButton = ConfigSection:Button({
+    Name = "Load Config",
+    Callback = function()
+        if selectedConfig and selectedConfig ~= "" then
+            local configPath = "fentanyl/Configs/" .. selectedConfig
+            
+            if isfile(configPath) then
+                local configData = readfile(configPath)
+                Library:LoadConfig(configData)
+                Library:Notification("Config loaded: " .. selectedConfig, 3, Color3fromRGB(0, 255, 0))
+            else
+                Library:Notification("Config not found: " .. selectedConfig, 3, Color3fromRGB(255, 0, 0))
+            end
+        else
+            Library:Notification("Please select a config to load", 3, Color3fromRGB(255, 255, 0))
+        end
+    end
+})
+
+-- Кнопка удаления конфига
+local DeleteButton = ConfigSection:Button({
+    Name = "Delete Config",
+    Risky = true,
+    Callback = function()
+        if selectedConfig and selectedConfig ~= "" then
+            local configPath = "fentanyl/Configs/" .. selectedConfig
+            print("Trying to delete config at path:", configPath)
+            print("File exists:", isfile(configPath))
+            
+            if isfile(configPath) then
+                delfile(configPath)
+                Library:Notification("Config deleted: " .. selectedConfig, 3, Color3fromRGB(0, 255, 0))
+                ConfigList:Refresh(updateConfigList())
+                selectedConfig = ""
+            else
+                Library:Notification("Config not found at: " .. configPath, 5, Color3fromRGB(255, 0, 0))
+            end
+        else
+            Library:Notification("Please select a config to delete", 3, Color3fromRGB(255, 255, 0))
+        end
+    end
+})
+
+-- Кнопка обновления списка конфигов
+local RefreshButton = ConfigSection:Button({
+    Name = "Refresh Config List",
+    Callback = function()
+        ConfigList:Refresh(updateConfigList())
+        Library:Notification("Config list refreshed", 2, Color3fromRGB(0, 255, 0))
+    end
+})
+
+
+-- Theme Customization Section
+local ThemeSection = SettingsPage:Section({
+    Name = "Theme Customization",
+    Side = 2
+})
+
+-- Accent Color Picker
+local AccentLabel = ThemeSection:Label("Accent Color", "Left")
+
+local _AccentColorPicker = AccentLabel:Colorpicker({
+    Name = "Accent Color",
+    Default = Color3fromRGB(31, 226, 130),
+    Alpha = 1,
+    Flag = "ThemeAccentColor",
+    Callback = function(color, alpha)
+        -- Обновляем акцентный цвет в теме
+        Library:ChangeTheme("Accent", color)
+        
+        -- Обновляем градиент заголовка окна
+        if Window.GradientTitle and Window.GradientTitle.Enabled then
+            Window.GradientTitle.Start = color
+            Window.GradientTitle.Middle = color
+            Window.GradientTitle.End = color
+        end
+    end
+})
+
+-- Window Background Color Picker
+local WindowBgLabel = ThemeSection:Label("Window Background", "Left")
+local _WindowBgColorPicker = WindowBgLabel:Colorpicker({
+    Name = "Window Background",
+    Default = Color3fromRGB(43, 43, 43),
+    Alpha = 1,
+    Flag = "ThemeWindowBackground",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Window Background", color)
+    end
+})
+
+-- Text Color Picker
+local TextLabel = ThemeSection:Label("Text Color", "Left")
+local _TextColorPicker = TextLabel:Colorpicker({
+    Name = "Text Color",
+    Default = Color3fromRGB(180, 180, 180),
+    Alpha = 1,
+    Flag = "ThemeTextColor",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Text", color)
+    end
+})
+
+-- Section Background Color Picker
+local SectionBgLabel = ThemeSection:Label("Section Background", "Left")
+local _SectionBgColorPicker = SectionBgLabel:Colorpicker({
+    Name = "Section Background",
+    Default = Color3fromRGB(19, 19, 19),
+    Alpha = 1,
+    Flag = "ThemeSectionBackground",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Section Background", color)
+    end
+})
+
+-- Element Color Picker
+local ElementLabel = ThemeSection:Label("Element Color", "Left")
+local _ElementColorPicker = ElementLabel:Colorpicker({
+    Name = "Element Color",
+    Default = Color3fromRGB(63, 63, 63),
+    Alpha = 1,
+    Flag = "ThemeElementColor",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Element", color)
+    end
+})
+
+-- Border Color Picker
+local BorderLabel = ThemeSection:Label("Border Color", "Left")
+local _BorderColorPicker = BorderLabel:Colorpicker({
+    Name = "Border Color",
+    Default = Color3fromRGB(68, 68, 68),
+    Alpha = 1,
+    Flag = "ThemeBorderColor",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Border", color)
+    end
+})
+
+-- Outline Color Picker
+local OutlineLabel = ThemeSection:Label("Outline Color", "Left")
+local _OutlineColorPicker = OutlineLabel:Colorpicker({
+    Name = "Outline Color",
+    Default = Color3fromRGB(0, 0, 0),
+    Alpha = 1,
+    Flag = "ThemeOutlineColor",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Outline", color)
+    end
+})
+
+-- Dark Liner Color Picker
+local DarkLinerLabel = ThemeSection:Label("Dark Liner", "Left")
+local _DarkLinerColorPicker = DarkLinerLabel:Colorpicker({
+    Name = "Dark Liner",
+    Default = Color3fromRGB(56, 56, 56),
+    Alpha = 1,
+    Flag = "ThemeDarkLiner",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Dark Liner", color)
+    end
+})
+
+-- Risky Color Picker
+local RiskyLabel = ThemeSection:Label("Risky Color", "Left")
+local _RiskyColorPicker = RiskyLabel:Colorpicker({
+    Name = "Risky Color",
+    Default = Color3fromRGB(255, 50, 50),
+    Alpha = 1,
+    Flag = "ThemeRiskyColor",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Risky", color)
+    end
+})
+
+-- Inline Color Picker
+local InlineLabel = ThemeSection:Label("Inline Color", "Left")
+local _InlineColorPicker = InlineLabel:Colorpicker({
+    Name = "Inline Color",
+    Default = Color3fromRGB(12, 12, 12),
+    Alpha = 1,
+    Flag = "ThemeInlineColor",
+    Callback = function(color, alpha)
+        Library:ChangeTheme("Inline", color)
+    end
+})
