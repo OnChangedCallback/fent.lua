@@ -609,88 +609,29 @@ local Library do
         end
 
         local font_sources = {
-            {
-                name = "Windows-XP-Tahoma",
-                ttf = "WindowsXPTahoma.ttf",
-                json = "WindowsXPTahoma.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/WindowsXPTahoma.txt"
-            },
-            {
-                name = "ProggyClean",
-                ttf = "ProggyClean.ttf",
-                json = "ProggyClean.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/ProggyClean.txt"
-            },
-            {
-                name = "ProggyTiny",
-                ttf = "ProggyTiny.ttf",
-                json = "ProggyTiny.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/ProggyTiny.txt"
-            },
-            {
-                name = "Minecraftia",
-                ttf = "Minecraftia.ttf",
-                json = "Minecraftia.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Minecraftia.txt"
-            },
-            {
-                name = "SmallestPixel7",
-                ttf = "SmallestPixel7.ttf",
-                json = "SmallestPixel7.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/SmallestPixel7.txt"
-            },
-            {
-                name = "Verdana",
-                ttf = "Verdana.ttf",
-                json = "Verdana.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Verdana.txt"
-            },
-            {
-                name = "VerdanaBold",
-                ttf = "VerdanaBold.ttf",
-                json = "VerdanaBold.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/VerdanaBold.txt"
-            },
-            {
-                name = "Tahoma",
-                ttf = "Tahoma.ttf",
-                json = "Tahoma.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Tahoma.txt"
-            },
-            {
-                name = "TahomaBold",
-                ttf = "TahomaBold.ttf",
-                json = "TahomaBold.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/TahomaBold.txt"
-            },
-            {
-                name = "CSGO",
-                ttf = "CSGO.ttf",
-                json = "CSGO.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/CSGO.txt"
-            },
-            {
-                name = "Stratum2",
-                ttf = "Stratum2.ttf",
-                json = "Stratum2.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Stratum2.txt"
-            },
-            {
-                name = "Visitor",
-                ttf = "Visitor.ttf",
-                json = "Visitor.json",
-                url = "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Visitor.txt"
-            }
+            {"Windows-XP-Tahoma", 200, "Regular", "https://github.com/peke7374/Bin/raw/refs/heads/main/Fent.wtf/Assets/windows-xp-tahoma.ttf"},
+            {"ProggyClean", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/ProggyClean.txt"},
+            {"ProggyTiny", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/ProggyTiny.txt"},
+            {"Minecraftia", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Minecraftia.txt"},
+            {"SmallestPixel7", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/SmallestPixel7.txt"},
+            {"Verdana", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Verdana.txt"},
+            {"VerdanaBold", 700, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/VerdanaBold.txt"},
+            {"Tahoma", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Tahoma.txt"},
+            {"TahomaBold", 700, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/TahomaBold.txt"},
+            {"CSGO", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/CSGO.txt"},
+            {"Stratum2", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Stratum2.txt"},
+            {"Visitor", 200, "Regular", "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Visitor.txt"}
         }
 
         for _, font_data in ipairs(font_sources) do
-            CustomFont:New(font_data.name, 200, "Regular", {
-                Url = font_data.url
+            CustomFont:New(font_data[1], font_data[2], font_data[3], {
+                Url = font_data[4]
             })
         end
 
         Library.Font = CustomFont:Get("Windows-XP-Tahoma")
-        Library.FontSources = font_sources
+        Library.AvailableFonts = font_sources
+        Library.CurrentFontName = "Windows-XP-Tahoma"
     end
 
     Library.Holder = Instances:Create("ScreenGui", {
