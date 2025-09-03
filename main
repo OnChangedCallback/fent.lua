@@ -1239,8 +1239,8 @@ local Library do
                 BorderColor3 = FromRGB(0, 0, 0),
                 Size = UDim2New(1, 11, 0, 2),
                 BorderSizePixel = 0,
-                BackgroundColor3 = Color
-            })  
+                BackgroundColor3 = Color or Library.Theme["Accent"]
+            })  Items["Liner"]:AddToTheme({BackgroundColor3 = "Accent"})
 
             Instances:Create("UIGradient", {
                 Parent = Items["Liner"].Instance,
@@ -2849,7 +2849,7 @@ local Library do
                 Parent = LerpingPageItems["Page"],
                 Name = "Animation",
                 Flag = Colorpicker.Flag .. "AnimationModeDropdown",
-                Items = { "Rainbow", "Fade Alpha" },
+                Items = { "Rainbow", "Astolfo", "Sunset", "Ocean", "Fire" },
                 MaxSize = 50,
                 Default = nil,
                 Callback = function(Value)
@@ -2859,11 +2859,7 @@ local Library do
                         Colorpicker.OnAnimationChanged(Value)
                     end
 
-                    if Value == "Fade Alpha" and AnimationIntensitySlider and AnimationSpeedSlider then 
-                        AnimationIntensitySlider:SetVisibility(true)
-                        AnimationSpeedSlider:SetVisibility(true)
-                        AnimationSpeedSliderItems["Slider"].Instance.Position = UDim2New(0, 8, 0, 55)
-                    elseif Value == "Rainbow" and AnimationIntensitySlider and  AnimationSpeedSlider then
+                    if (Value == "Astolfo" or Value == "Rainbow" or Value == "Sunset" or Value == "Ocean" or Value == "Fire") and AnimationIntensitySlider and AnimationSpeedSlider then 
                         AnimationIntensitySlider:SetVisibility(false)
                         AnimationSpeedSlider:SetVisibility(true)
                         AnimationSpeedSliderItems["Slider"].Instance.Position = UDim2New(0, 8, 0, 25)
@@ -3209,16 +3205,185 @@ local Library do
                 end)
             end
 
-            if Value == "Fade Alpha" then
+
+            if Value == "Astolfo" then
+                OldColor = Colorpicker.Color
                 Library:Thread(function()
-                    while task.wait() do
-                        local AlphaIntensity = Colorpicker.CurrentAnimationIntensity
-                        local Alpha = MathAbs(MathSin(tick() % AlphaIntensity) * Colorpicker.CurrentAnimationSpeed)
+                    while task.wait() do 
+                        local time = tick() * Colorpicker.CurrentAnimationSpeed
+                        local phase = (time % 3)
+                        local Color
+                        
+                        if phase < 1 then
+                            -- Лерп от розового (170, 68, 68) к голубому (68, 170, 170)
+                            local t = phase
+                            Color = FromRGB(
+                                170 - (170 - 68) * t,
+                                68 + (170 - 68) * t,
+                                68 + (170 - 68) * t
+                            )
+                        elseif phase < 2 then
+                            -- Лерп от голубого (68, 170, 170) к ярко-красному (255, 68, 68)
+                            local t = phase - 1
+                            Color = FromRGB(
+                                68 + (255 - 68) * t,
+                                170 - (170 - 68) * t,
+                                170 - (170 - 68) * t
+                            )
+                        else
+                            -- Лерп от ярко-красного (255, 68, 68) обратно к розовому (170, 68, 68)
+                            local t = phase - 2
+                            Color = FromRGB(
+                                255 - (255 - 170) * t,
+                                68,
+                                68
+                            )
+                        end
 
-                        Colorpicker:Set(Colorpicker.Color, Alpha)
+                        Colorpicker:Set(Color, Colorpicker.Alpha)
 
-                        if Colorpicker.CurrentAnimation ~= "Fade Alpha" then
-                            Colorpicker:Set(Colorpicker.Color, OldAlpha)
+                        if Colorpicker.CurrentAnimation ~= "Astolfo" then
+                            Colorpicker:Set(OldColor, Colorpicker.Alpha)
+                            break
+                        end
+                    end
+                end)
+            end
+
+            if Value == "Sunset" then
+                OldColor = Colorpicker.Color
+                Library:Thread(function()
+                    while task.wait() do 
+                        local time = tick() * Colorpicker.CurrentAnimationSpeed
+                        local phase = (time % 4)
+                        local Color
+                        
+                        if phase < 1 then
+                            -- Лерп от оранжевого (255, 165, 0) к красному (255, 69, 0)
+                            local t = phase
+                            Color = FromRGB(
+                                255,
+                                165 - (165 - 69) * t,
+                                0
+                            )
+                        elseif phase < 2 then
+                            -- Лерп от красного (255, 69, 0) к розовому (255, 20, 147)
+                            local t = phase - 1
+                            Color = FromRGB(
+                                255,
+                                69 - (69 - 20) * t,
+                                0 + 147 * t
+                            )
+                        elseif phase < 3 then
+                            -- Лерп от розового (255, 20, 147) к фиолетовому (138, 43, 226)
+                            local t = phase - 2
+                            Color = FromRGB(
+                                255 - (255 - 138) * t,
+                                20 + (43 - 20) * t,
+                                147 + (226 - 147) * t
+                            )
+                        else
+                            -- Лерп от фиолетового (138, 43, 226) обратно к оранжевому (255, 165, 0)
+                            local t = phase - 3
+                            Color = FromRGB(
+                                138 + (255 - 138) * t,
+                                43 + (165 - 43) * t,
+                                226 - 226 * t
+                            )
+                        end
+
+                        Colorpicker:Set(Color, Colorpicker.Alpha)
+
+                        if Colorpicker.CurrentAnimation ~= "Sunset" then
+                            Colorpicker:Set(OldColor, Colorpicker.Alpha)
+                            break
+                        end
+                    end
+                end)
+            end
+
+            if Value == "Ocean" then
+                OldColor = Colorpicker.Color
+                Library:Thread(function()
+                    while task.wait() do 
+                        local time = tick() * Colorpicker.CurrentAnimationSpeed
+                        local phase = (time % 3)
+                        local Color
+                        
+                        if phase < 1 then
+                            -- Лерп от темно-синего (0, 119, 190) к голубому (0, 191, 255)
+                            local t = phase
+                            Color = FromRGB(
+                                0,
+                                119 + (191 - 119) * t,
+                                190 + (255 - 190) * t
+                            )
+                        elseif phase < 2 then
+                            -- Лерп от голубого (0, 191, 255) к бирюзовому (64, 224, 208)
+                            local t = phase - 1
+                            Color = FromRGB(
+                                0 + 64 * t,
+                                191 + (224 - 191) * t,
+                                255 - (255 - 208) * t
+                            )
+                        else
+                            -- Лерп от бирюзового (64, 224, 208) обратно к темно-синему (0, 119, 190)
+                            local t = phase - 2
+                            Color = FromRGB(
+                                64 - 64 * t,
+                                224 - (224 - 119) * t,
+                                208 - (208 - 190) * t
+                            )
+                        end
+
+                        Colorpicker:Set(Color, Colorpicker.Alpha)
+
+                        if Colorpicker.CurrentAnimation ~= "Ocean" then
+                            Colorpicker:Set(OldColor, Colorpicker.Alpha)
+                            break
+                        end
+                    end
+                end)
+            end
+
+            if Value == "Fire" then
+                OldColor = Colorpicker.Color
+                Library:Thread(function()
+                    while task.wait() do 
+                        local time = tick() * Colorpicker.CurrentAnimationSpeed
+                        local phase = (time % 3)
+                        local Color
+                        
+                        if phase < 1 then
+                            -- Лерп от желтого (255, 255, 0) к оранжевому (255, 165, 0)
+                            local t = phase
+                            Color = FromRGB(
+                                255,
+                                255 - (255 - 165) * t,
+                                0
+                            )
+                        elseif phase < 2 then
+                            -- Лерп от оранжевого (255, 165, 0) к красному (255, 0, 0)
+                            local t = phase - 1
+                            Color = FromRGB(
+                                255,
+                                165 - 165 * t,
+                                0
+                            )
+                        else
+                            -- Лерп от красного (255, 0, 0) обратно к желтому (255, 255, 0)
+                            local t = phase - 2
+                            Color = FromRGB(
+                                255,
+                                0 + 255 * t,
+                                0
+                            )
+                        end
+
+                        Colorpicker:Set(Color, Colorpicker.Alpha)
+
+                        if Colorpicker.CurrentAnimation ~= "Fire" then
+                            Colorpicker:Set(OldColor, Colorpicker.Alpha)
                             break
                         end
                     end
@@ -4126,10 +4291,21 @@ local Library do
                     Parent = Items["Text"].Instance,
                     Rotation = 0,
                     Color = RGBSequence{
-                        RGBSequenceKeypoint(0, Window.GradientTitle.Start),
-                        RGBSequenceKeypoint(0.25, Window.GradientTitle.Middle),
-                        RGBSequenceKeypoint(1, Window.GradientTitle.End)
+                        RGBSequenceKeypoint(0, Library.Theme["Accent"]),
+                        RGBSequenceKeypoint(0.25, Library.Theme["Accent"]),
+                        RGBSequenceKeypoint(1, Library.Theme["Accent"])
                     }
+                })
+                
+                -- Добавляем градиент к системе тем для автоматического обновления
+                UIGradient:AddToTheme({
+                    Color = function()
+                        return RGBSequence{
+                            RGBSequenceKeypoint(0, Library.Theme["Accent"]),
+                            RGBSequenceKeypoint(0.25, Library.Theme["Accent"]),
+                            RGBSequenceKeypoint(1, Library.Theme["Accent"])
+                        }
+                    end
                 })
 
                 Items["Text"].Instance.TextColor3 = FromRGB(255, 255, 255)
