@@ -4291,21 +4291,10 @@ local Library do
                     Parent = Items["Text"].Instance,
                     Rotation = 0,
                     Color = RGBSequence{
-                        RGBSequenceKeypoint(0, Library.Theme["Accent"]),
-                        RGBSequenceKeypoint(0.25, Library.Theme["Accent"]),
-                        RGBSequenceKeypoint(1, Library.Theme["Accent"])
+                        RGBSequenceKeypoint(0, Window.GradientTitle.Start),
+                        RGBSequenceKeypoint(0.25, Window.GradientTitle.Middle),
+                        RGBSequenceKeypoint(1, Window.GradientTitle.End)
                     }
-                })
-                
-                -- Добавляем градиент к системе тем для автоматического обновления
-                UIGradient:AddToTheme({
-                    Color = function()
-                        return RGBSequence{
-                            RGBSequenceKeypoint(0, Library.Theme["Accent"]),
-                            RGBSequenceKeypoint(0.25, Library.Theme["Accent"]),
-                            RGBSequenceKeypoint(1, Library.Theme["Accent"])
-                        }
-                    end
                 })
 
                 Items["Text"].Instance.TextColor3 = FromRGB(255, 255, 255)
