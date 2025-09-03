@@ -73,7 +73,7 @@ do
 end
 
 -- Загрузка UI библиотеки
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/aa"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/library"))()
 
 -- Проверка загрузки библиотеки
 if not Library then
@@ -123,7 +123,7 @@ local SettingsPage = Window:Page({
 
 -- Config Manager Section
 local ConfigSection = SettingsPage:Section({
-    Name = "Config Manager",
+    Name = "Config",
     Side = 1
 })
 
@@ -170,7 +170,7 @@ local ConfigList = ConfigSection:Listbox({
 
 -- Текстбокс для имени нового конфига
 local ConfigNameBox = ConfigSection:Textbox({
-    Name = "Config Name",
+    Name = "",
     Default = "",
     Placeholder = "Enter config name...",
     Flag = "ConfigName",
@@ -281,7 +281,7 @@ local RefreshButton = ConfigSection:Button({
 
 -- Theme Customization Section
 local ThemeSection = SettingsPage:Section({
-    Name = "Theme Customization",
+    Name = "Theming",
     Side = 2
 })
 
@@ -411,5 +411,35 @@ local _InlineColorPicker = InlineLabel:Colorpicker({
     Flag = "ThemeInlineColor",
     Callback = function(color, alpha)
         Library:ChangeTheme("Inline", color)
+    end
+})
+
+-- HUD Section
+local HUDSection = SettingsPage:Section({
+    Name = "HUD",
+    Side = 2
+})
+
+-- Keybinds Toggle
+local _KeybindsToggle = HUDSection:Toggle({
+    Name = "Keybinds",
+    Default = true,
+    Flag = "HUDKeybinds",
+    Callback = function(value)
+        if KeybindList then
+            KeybindList:SetVisibility(value)
+        end
+    end
+})
+
+-- Watermark Toggle
+local _WatermarkToggle = HUDSection:Toggle({
+    Name = "Watermark",
+    Default = true,
+    Flag = "HUDWatermark",
+    Callback = function(value)
+        if Watermark then
+            Watermark:SetVisibility(value)
+        end
     end
 })
