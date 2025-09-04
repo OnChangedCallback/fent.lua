@@ -1,73 +1,48 @@
--- Переменные (согласно правилам пользователя)
 -- Services
 local game = game
-local Players = game:GetService("Players")
-local workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local Lighting = game:GetService("Lighting")
-
--- Players
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+local workspace = workspace
+local a = game:GetService("Players")
+local b = game:GetService("RunService")
+local c = game:GetService("UserInputService")
+local d = game:GetService("TweenService")
+local e = game:GetService("HttpService")
+local f = game:GetService("Lighting")
+local g = a.LocalPlayer
 
 -- Math
-local random, huge = math.random, math.huge
-local floor, ceil = math.floor, math.ceil
-local abs, sqrt = math.abs, math.sqrt
-local sin, cos = math.sin, math.cos
+local h, i = math.random, math.huge
+local j, k = math.floor, math.ceil
+local l, m = math.abs, math.sqrt
+local n, o = math.sin, math.cos
+local atan2 = math.atan2
 local rad, deg = math.rad, math.deg
 local min, max = math.min, math.max
-local clamp = math.clamp
-local atan2 = math.atan2
-local pi = math.pi
 
--- Глобальные переменные для ShowAimbot
-showAimbot = false
-aimbotColor = Color3.fromRGB(255, 0, 0)
-aimbotTracer = nil
-currentAimPosition = nil
+-- Tables
+local p, q = table.insert, table.remove
+local r, s = table.sort, table.concat
 
--- Table
-local insert, remove = table.insert, table.remove
-local sort, concat = table.sort, table.concat
+-- Strings
+local t, u = string.format, string.match
+local v, w = string.lower, string.upper
+local x, y = string.sub, string.gsub
 
--- String
-local format, match = string.format, string.match
-local lower, upper = string.lower, string.upper
-local sub, gsub = string.sub, string.gsub
-
--- Types
-local Instance = Instance
-local Enum = Enum
-local Drawing = Drawing
-local Color3 = Color3
-local Vector2 = Vector2
-local Vector3 = Vector3
-local CFrame = CFrame
-local Ray = Ray
-local UDim2 = UDim2
-
--- Constructors
-local setmetatable = setmetatable
-local getmetatable = getmetatable
-local newcclosure = newcclosure
-local Instance_new = Instance.new
-local Color3fromRGB = Color3.fromRGB
-local UDim2new = UDim2.new
-local Vector2new = Vector2.new
-local Vector3new = Vector3.new
-local CFramenew = CFrame.new
-
--- Other
+-- Global functions
 local pairs, ipairs = pairs, ipairs
 local type, tostring = type, tostring
 local pcall, xpcall = pcall, xpcall
 local loadstring = loadstring
+local setmetatable = setmetatable
+local getmetatable = getmetatable
 
--- File system functions
+-- Constructors
+local z = Color3.fromRGB
+local A = UDim2.new
+local B = Vector3.new
+local C = CFrame.new
+local Ray_new = Ray.new
+
+-- File functions
 local isfolder = isfolder
 local isfile = isfile
 local listfiles = listfiles
@@ -75,734 +50,647 @@ local writefile = writefile
 local readfile = readfile
 local delfile = delfile
 local makefolder = makefolder
-
--- Clipboard
 local setclipboard = setclipboard
 
--- Services for server functions
-local TeleportService = game:GetService("TeleportService")
+-- Other services
+local D = game:GetService("TeleportService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Camera = workspace.CurrentCamera
+local Mouse = g:GetMouse()
+-- Utility library
+local E = {}
+local F = {} -- connections storage
 
--- Utility библиотека
-local utility = {}
-local connections = {}
-
--- Utility функции
-do
-    function utility.new_connection(event, callback)
-        local connection = event:Connect(callback)
-        insert(connections, connection)
-        return connection
+do -- Utility functions
+    function E.new_connection(G, H)
+        local I = G:Connect(H)
+        p(F, I)
+        return I
     end
     
-    function utility.disconnect_all()
-        for _, connection in ipairs(connections) do
-            if connection then
-                connection:Disconnect()
+    function E.disconnect_all()
+        for J, I in ipairs(F) do
+            if I then
+                I:Disconnect()
             end
         end
-        connections = {}
+        F = {}
     end
     
-    function utility.getHeld()
-        local character = LocalPlayer.Character
+    -- Get held weapon
+    function E:GetHeld()
+        local character = g.Character
         if not character then return nil end
         
         for _, tool in pairs(character:GetChildren()) do
-            if tool:IsA("Tool") then
+            if tool:IsA("Tool") and tool:FindFirstChild("Handle") then
                 return tool
             end
         end
         return nil
     end
     
-    function utility.getCharacter(player)
-        return player and player.Character
+    -- Get weapon origin position
+    function E:GetOrigin()
+        local tool = E:GetHeld()
+        if tool then
+            local bulletStart = tool:FindFirstChild("BulletStart")
+            if bulletStart then
+                return bulletStart.Position
+            end
+            return tool.Handle.Position
+        end
+        return Camera.CFrame.Position
     end
     
-    function utility.getHumanoidRootPart(character)
-        return character and character:FindFirstChild("HumanoidRootPart")
+    function E:GetEncryptionDict()
+        -- Get encryption dictionary from SoundService
+        local soundService = game:GetService("SoundService")
+        local encryptionData = soundService:FindFirstChild("EncryptionData")
+        if encryptionData then
+            local currentDict = encryptionData:FindFirstChild("CurrentDict")
+            if currentDict then
+                local success, dict = pcall(function()
+                    return game:GetService("HttpService"):JSONDecode(currentDict.Value)
+                end)
+                if success then
+                    return dict
+                end
+            end
+        end
+        -- Return default dict if not found
+        return {
+            a = "qUz3j0QwOtY",
+            c = "pWBL9UBsf13",
+            b = "CVz3mo",
+            e = "j6zNLcXtzsO",
+            d = "MVhC83jAxA",
+            g = "jjNjbJy1",
+            f = "X2Bt4W",
+            i = "y7BXZ",
+            h = "SuQq4La",
+            k = "GUudffJrBEXq",
+            j = "2FLZxyayQd",
+            m = "0FKMYohHyexy",
+            l = "YFAjIdIb9",
+            o = "jT3QZxSR",
+            n = "f4rXJbnSnB0c",
+            q = "TYJHKvYEVZio",
+            p = "HHRupG8ouCG",
+            s = "1DR1SyqsY1",
+            r = "ertzRBJqboSl",
+            u = "N0nfejjGk",
+            t = "ZU0Hj6o9w",
+            w = "EMXOZo",
+            v = "Eu7ruC4e",
+            y = "M7lWHYRX",
+            x = "6Y5ootWPt"
+        }
     end
     
-    function utility.getMousePosition()
-        return UserInputService:GetMouseLocation()
+    function E:GetDistance(target)
+        if not target then return 0 end
+        local character = g.Character
+        if not character then return 0 end
+        
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if not humanoidRootPart then return 0 end
+        
+        local targetRoot = target:FindFirstChild("HumanoidRootPart")
+        if not targetRoot then
+            targetRoot = target:FindFirstChild("Torso")
+        end
+        if not targetRoot then return 0 end
+        
+        return (humanoidRootPart.Position - targetRoot.Position).Magnitude
     end
     
-    function utility.worldToViewportPoint(position)
-        return Camera:WorldToViewportPoint(position)
-    end
-end
-
--- Загрузка UI библиотеки
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/library"))()
-
--- Проверка загрузки библиотеки
-if not Library then
-    warn("Failed to load UI Library")
-    return
-end
-
--- Создание основного окна
-local Window = Library:Window({
-    Name = "Fentik.sexyy",
-    Size = UDim2.new(0, 700, 0, 670),
-    GradientTitle = {
-        Enabled = false,
-        Enabled = false,
-        Start = Color3.fromRGB(255, 255, 255),
-        Middle = Color3.fromRGB(255, 255, 255),
-        End = Color3.fromRGB(255, 255, 255),
-        Speed = 0.1
-    }
-})
-
-local RagebotPage = Window:Page({
-    Name = "Ragebot",
-    Columns = 2
-})
-
--- Ragebot вкладка (изолирована в блоке)
-do
-    -- Utility функции для RageBot
-    local utility = {}
-    
-    utility.getCharacter = function(player)
-        return player and player.Character
+    -- Check if player is alive
+    function E:IsAlive(player)
+        if not player then player = g end
+        local character = player.Character
+        if not character then return false end
+        
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return false end
+        
+        return humanoid.Health > 0
     end
     
-    utility.getHumanoid = function(character)
-        return character and character:FindFirstChildOfClass("Humanoid")
-    end
-    
-    utility.getHumanoidRootPart = function(character)
-        return character and character:FindFirstChild("HumanoidRootPart")
-    end
-    
-    utility.isAlive = function(character)
-        local humanoid = utility.getHumanoid(character)
-        return humanoid and humanoid.Health > 0
-    end
-    
-    utility.hasForceField = function(character)
-        return character and character:FindFirstChild("ForceField") ~= nil
-    end
-    
-    utility.getDistance = function(pos1, pos2)
+    -- Get distance between two positions
+    function E:GetDistance(pos1, pos2)
         return (pos1 - pos2).Magnitude
     end
     
-    utility.worldToViewportPoint = function(position)
-        return workspace.CurrentCamera:WorldToViewportPoint(position)
+    -- World to screen position
+    function E:WorldToScreen(position)
+        local screenPos, onScreen = Camera:WorldToScreenPoint(position)
+        return B(screenPos.X, screenPos.Y), onScreen
     end
+end
+
+-- Framework library
+local framework = {connections = {}}
+
+do -- Targeting framework
+    framework.targeting = {}
+    local targeting = framework.targeting
     
-    utility.getMousePosition = function()
-        local mouse = LocalPlayer:GetMouse()
-        return Vector2new(mouse.X, mouse.Y)
-    end
-    
-    utility.getBulletStart = function()
-        local character = utility.getCharacter(LocalPlayer)
-        if not character then return nil end
-        
-        for _, tool in pairs(character:GetChildren()) do
-            if tool:IsA("Tool") then
-                local bulletStart = tool:FindFirstChild("BulletStart")
-                if bulletStart then
-                    return bulletStart
+    -- Get all valid players
+    function targeting:GetPlayers()
+        local validPlayers = {}
+        for _, player in ipairs(a:GetPlayers()) do
+            if player ~= g and E:IsAlive(player) then
+                local character = player.Character
+                if character and character:FindFirstChild("HumanoidRootPart") then
+                    -- Check for ForceField
+                    if not character:FindFirstChild("ForceField") then
+                        p(validPlayers, player)
+                    end
                 end
             end
+        end
+        return validPlayers
+    end
+    
+    -- Get closest player to local player
+    function targeting:GetClosestToPlayer()
+        local players = self:GetPlayers()
+        local closest = nil
+        local closestDistance = i
+        
+        local myPos = g.Character and g.Character:FindFirstChild("HumanoidRootPart")
+        if not myPos then return nil end
+        myPos = myPos.Position
+        
+        for _, player in ipairs(players) do
+            local character = player.Character
+            if character then
+                local root = character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local distance = E:GetDistance(myPos, root.Position)
+                    if distance < closestDistance then
+                        closest = player
+                        closestDistance = distance
+                    end
+                end
+            end
+        end
+        
+        return closest
+    end
+    
+    -- Get closest player to cursor
+    function targeting:GetClosestToCursor()
+        local players = self:GetPlayers()
+        local closest = nil
+        local closestDistance = i
+        
+        local mousePos = c:GetMouseLocation()
+        
+        for _, player in ipairs(players) do
+            local character = player.Character
+            if character then
+                local root = character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local screenPos, onScreen = E:WorldToScreen(root.Position)
+                    if onScreen then
+                        local distance = E:GetDistance(B(mousePos.X, mousePos.Y, 0), B(screenPos.X, screenPos.Y, 0))
+                        if distance < closestDistance then
+                            closest = player
+                            closestDistance = distance
+                        end
+                    end
+                end
+            end
+        end
+        
+        return closest
+    end
+    
+    -- Get closest player to screen center
+    function targeting:GetClosestToScreenCenter()
+        local players = self:GetPlayers()
+        local closest = nil
+        local closestDistance = i
+        
+        local screenCenter = B(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2, 0)
+        
+        for _, player in ipairs(players) do
+            local character = player.Character
+            if character then
+                local root = character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local screenPos, onScreen = E:WorldToScreen(root.Position)
+                    if onScreen then
+                        local distance = E:GetDistance(screenCenter, B(screenPos.X, screenPos.Y, 0))
+                        if distance < closestDistance then
+                            closest = player
+                            closestDistance = distance
+                        end
+                    end
+                end
+            end
+        end
+        
+        return closest
+    end
+    
+    -- Main target selection function
+    function targeting:GetTarget(method)
+        if method == "Closest" then
+            return self:GetClosestToPlayer()
+        elseif method == "Cursor" then
+            return self:GetClosestToCursor()
+        elseif method == "ScrCenter" then
+            return self:GetClosestToScreenCenter()
         end
         return nil
     end
+end
+local K =
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/library"))()
+local L =
+    K:Window(
+    {
+        Name = "Fentik.sexyy",
+        Size = UDim2.new(0, 700, 0, 670),
+        GradientTitle = {
+            Enabled = false,
+            Enabled = false,
+            Start = Color3.fromRGB(255, 255, 255),
+            Middle = Color3.fromRGB(255, 255, 255),
+            End = Color3.fromRGB(255, 255, 255),
+            Speed = 0.1
+        }
+    }
+)
+local M = L:Page({Name = "Ragebot", Columns = 2})
+local N = L:Page({Name = "Visuals", Columns = 2})
+local O = L:Page({Name = "Misc", Columns = 2})
+local P = L:Page({Name = "AntiAim", Columns = 2})
+
+-- Ragebot variables
+local RagebotEnabled = false
+local RagebotTarget = nil
+local RagebotTargetMethod = "Closest"
+local RagebotConnection = nil
+local AutoShootEnabled = false
+local AutoReloadEnabled = false
+local AutoShootConnection = nil
+local AimPart = "Head"
+local ShowAimbot = false
+local AimbotVisualizationType = "Beam"
+local AimbotVisualization = nil
+
+do -- Ragebot section
+    local RagebotMain = M:Section({Name = "Main", Side = 1})
     
-    utility.canShoot = function()
-        local character = utility.getCharacter(LocalPlayer)
-        if not utility.isAlive(character) then return false end
-        if utility.hasForceField(character) then return false end
-        
-        -- Проверяем наличие оружия
-        local bulletStart = utility.getBulletStart()
-        return bulletStart ~= nil
-    end
+    -- Ragebot toggle
+    local RagebotToggle = RagebotMain:Toggle({
+        Name = "Ragebot",
+        Default = false,
+        Flag = "RagebotEnabled",
+        Callback = function(value)
+            RagebotEnabled = value
+            
+            if value then
+                -- Enable ragebot logic
+                if not RagebotConnection then
+                    RagebotConnection = E.new_connection(b.Heartbeat, function()
+                        if not E:IsAlive() then return end
+                        
+                        -- Get target based on selected method (360 FOV, no visibility check)
+                        RagebotTarget = framework.targeting:GetTarget(RagebotTargetMethod)
+                        
+                        if RagebotTarget and RagebotTarget.Character then
+                            local character = g.Character
+                            if character then
+                                -- Set rageaim values for silent aim
+                                local rageaimValue = character:FindFirstChild("rageaim")
+                                if not rageaimValue then
+                                    rageaimValue = Instance.new("BoolValue")
+                                    rageaimValue.Name = "rageaim"
+                                    rageaimValue.Parent = character
+                                end
+                                rageaimValue.Value = true
+                                
+                                -- Set aim position
+                                local aimposValue = character:FindFirstChild("aimpos")
+                                if not aimposValue then
+                                    aimposValue = Instance.new("Vector3Value")
+                                    aimposValue.Name = "aimpos"
+                                    aimposValue.Parent = character
+                                end
+                                
+                                -- Get target part based on selected aim part
+                                local targetRoot = RagebotTarget.Character:FindFirstChild(AimPart)
+                                if not targetRoot then
+                                    -- Fallback to Head if selected part not found
+                                    targetRoot = RagebotTarget.Character:FindFirstChild("Head")
+                                    if not targetRoot then
+                                        targetRoot = RagebotTarget.Character:FindFirstChild("HumanoidRootPart")
+                                    end
+                                end
+                                
+                                if targetRoot then
+                                    aimposValue.Value = targetRoot.Position
+                                end
+                            end
+                        else
+                            -- No target, disable rageaim
+                            local character = g.Character
+                            if character then
+                                local rageaimValue = character:FindFirstChild("rageaim")
+                                if rageaimValue then
+                                    rageaimValue.Value = false
+                                end
+                            end
+                        end
+                    end)
+                end
+            else
+                -- Disable ragebot logic
+                if RagebotConnection then
+                    RagebotConnection:Disconnect()
+                    RagebotConnection = nil
+                end
+                
+                -- Clean up values
+                local character = g.Character
+                if character then
+                    local rageaimValue = character:FindFirstChild("rageaim")
+                    if rageaimValue then
+                        rageaimValue.Value = false
+                    end
+                end
+                
+                RagebotTarget = nil
+            end
+        end
+    })
     
-    -- Framework функции для таргетинга
-    local framework = {}
+    -- Target selection dropdown
+    local TargetDropdown = RagebotMain:Dropdown({
+        Name = "Target Selection",
+        Items = {"Closest", "Cursor", "ScrCenter"},
+        Default = "Closest",
+        Flag = "RagebotTargetMethod",
+        Callback = function(value)
+            RagebotTargetMethod = value
+        end
+    })
     
-    framework.getValidTargets = function()
-        local validTargets = {}
-        local localChar = utility.getCharacter(LocalPlayer)
-        if not localChar then return validTargets end
-        
-        local localHRP = utility.getHumanoidRootPart(localChar)
-        if not localHRP then return validTargets end
-        
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local targetChar = utility.getCharacter(player)
-                if targetChar and utility.isAlive(targetChar) and not utility.hasForceField(targetChar) then
-                    local targetHRP = utility.getHumanoidRootPart(targetChar)
-                    if targetHRP then
-                        insert(validTargets, {
-                            player = player,
-                            character = targetChar,
-                            humanoidRootPart = targetHRP,
-                            distance = utility.getDistance(localHRP.Position, targetHRP.Position)
-                        })
+    -- Auto Shoot toggle
+    local AutoShootToggle = RagebotMain:Toggle({
+        Name = "Auto Shoot",
+        Default = false,
+        Flag = "AutoShoot",
+        Callback = function(value)
+            AutoShootEnabled = value
+            
+            if value then
+                -- Start auto shoot logic
+                if not AutoShootConnection then
+                    AutoShootConnection = E.new_connection(b.Heartbeat, function()
+                        if not E:IsAlive() then return end
+                        
+                        local character = g.Character
+                        if character then
+                            -- Создаем или обновляем BoolValue autoshoot
+                            local autoShootValue = character:FindFirstChild("autoshoot")
+                            if not autoShootValue then
+                                autoShootValue = Instance.new("BoolValue")
+                                autoShootValue.Name = "autoshoot"
+                                autoShootValue.Parent = character
+                            end
+                            
+                            -- Включаем/выключаем autoshoot в зависимости от наличия цели
+                            if RagebotEnabled and RagebotTarget then
+                                autoShootValue.Value = true
+                            else
+                                autoShootValue.Value = false
+                            end
+                        end
+                    end)
+                end
+            else
+                -- Stop auto shoot
+                if AutoShootConnection then
+                    AutoShootConnection:Disconnect()
+                    AutoShootConnection = nil
+                end
+                
+                -- Отключаем autoshoot value
+                local character = g.Character
+                if character then
+                    local autoShootValue = character:FindFirstChild("autoshoot")
+                    if autoShootValue then
+                        autoShootValue.Value = false
                     end
                 end
             end
         end
-        
-        return validTargets
-    end
-    
-    framework.getClosestTarget = function()
-        local targets = framework.getValidTargets()
-        if #targets == 0 then return nil end
-        
-        sort(targets, function(a, b)
-            return a.distance < b.distance
-        end)
-        
-        return targets[1]
-    end
-    
-    framework.getClosestToCursor = function()
-        local targets = framework.getValidTargets()
-        if #targets == 0 then return nil end
-        
-        local mousePos = utility.getMousePosition()
-        local closestTarget = nil
-        local closestDistance = huge
-        
-        for _, target in ipairs(targets) do
-            local screenPos, onScreen = utility.worldToViewportPoint(target.humanoidRootPart.Position)
-            local screenPoint = Vector2new(screenPos.X, screenPos.Y)
-            local distance = (mousePos - screenPoint).Magnitude
-            
-            if distance < closestDistance then
-                closestDistance = distance
-                closestTarget = target
-            end
-        end
-        
-        return closestTarget
-    end
-    
-    framework.getTargetPart = function(character, priority)
-        if not character then return nil end
-        
-        -- R6 части тела
-        if priority == "Head" then
-            return character:FindFirstChild("Head")
-        elseif priority == "Torso" then
-            return character:FindFirstChild("Torso")
-        elseif priority == "Left Arm" then
-            return character:FindFirstChild("Left Arm")
-        elseif priority == "Right Arm" then
-            return character:FindFirstChild("Right Arm")
-        elseif priority == "Left Leg" then
-            return character:FindFirstChild("Left Leg")
-        elseif priority == "Right Leg" then
-            return character:FindFirstChild("Right Leg")
-        elseif priority == "Random" then
-            local parts = {}
-            local r6Parts = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
-            for _, partName in ipairs(r6Parts) do
-                local part = character:FindFirstChild(partName)
-                if part then insert(parts, part) end
-            end
-            
-            if #parts > 0 then
-                return parts[random(1, #parts)]
-            end
-        end
-        
-        return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
-    end
-    
-    framework.predictPosition = function(target, predictionTime)
-        if not target or not target.humanoidRootPart then return target.humanoidRootPart.Position end
-        
-        local humanoid = utility.getHumanoid(target.character)
-        if humanoid then
-            local velocity = target.humanoidRootPart.AssemblyLinearVelocity
-            if velocity then
-                return target.humanoidRootPart.Position + (velocity * predictionTime)
-            end
-        end
-        
-        return target.humanoidRootPart.Position
-    end
-    
-    framework.aimAt = function(targetPosition)
-        local character = utility.getCharacter(LocalPlayer)
-        if not character then return end
-        
-        -- Сохраняем позицию для трейсера
-        currentAimPosition = targetPosition
-        
-        -- Обновляем трейсер если включен
-        if showAimbot and aimbotTracer then
-            framework.updateTracer(targetPosition)
-        end
-        
-        -- Создаем/обновляем значения для встроенной системы стрельбы
-        local aimPos = character:FindFirstChild("aimpos")
-        if not aimPos then
-            aimPos = Instance.new("Vector3Value")
-            aimPos.Name = "aimpos"
-            aimPos.Parent = character
-        end
-        aimPos.Value = targetPosition
-        
-        local rageAim = character:FindFirstChild("rageaim")
-        if not rageAim then
-            rageAim = Instance.new("BoolValue")
-            rageAim.Name = "rageaim"
-            rageAim.Parent = character
-        end
-        rageAim.Value = true
-    end
-    
-    framework.shoot = function()
-        local character = utility.getCharacter(LocalPlayer)
-        if not character then return end
-        
-        local autoShoot = character:FindFirstChild("autoshoot")
-        if not autoShoot then
-            autoShoot = Instance.new("BoolValue")
-            autoShoot.Name = "autoshoot"
-            autoShoot.Parent = character
-        end
-        autoShoot.Value = true
-    end
-    
-    framework.stopShooting = function()
-        local character = utility.getCharacter(LocalPlayer)
-        if not character then return end
-        
-        local autoShoot = character:FindFirstChild("autoshoot")
-        if autoShoot then
-            autoShoot.Value = false
-        end
-        
-        local rageAim = character:FindFirstChild("rageaim")
-        if rageAim then
-            rageAim.Value = false
-        end
-        
-        -- Скрываем трейсер
-        if aimbotTracer then
-            aimbotTracer.Parent = nil
-        end
-        currentAimPosition = nil
-    end
-    
-    framework.createTracer = function()
-        -- Создаем 3D трейсер через Part
-        if aimbotTracer then
-            aimbotTracer:Destroy()
-        end
-        
-        aimbotTracer = Instance.new("Part")
-        aimbotTracer.Name = "AimbotTracer"
-        aimbotTracer.Anchored = true
-        aimbotTracer.CanCollide = false
-        aimbotTracer.Material = Enum.Material.Neon
-        aimbotTracer.Color = aimbotColor
-        aimbotTracer.Size = Vector3new(0.1, 0.1, 1)
-        aimbotTracer.Transparency = 0.5
-        
-        return aimbotTracer
-    end
-    
-    framework.updateTracer = function(targetPosition)
-        if not aimbotTracer or not targetPosition then return end
-        
-        local character = utility.getCharacter(LocalPlayer)
-        if not character then return end
-        
-        -- Получаем позицию начала трейсера (откуда стреляем)
-        local startPosition
-        
-        -- Используем utility.getBulletStart() который уже правильно находит BulletStart
-        local bulletStartPart = utility.getBulletStart()
-        if bulletStartPart then
-            startPosition = bulletStartPart.Position
-        else
-            -- Если нет BulletStart, используем голову или HRP
-            local head = character:FindFirstChild("Head")
-            local hrp = character:FindFirstChild("HumanoidRootPart")
-            startPosition = (head and head.Position) or (hrp and hrp.Position)
-        end
-        
-        if not startPosition then return end
-        
-        -- Вычисляем длину и позицию трейсера
-        local distance = (targetPosition - startPosition).Magnitude
-        local midPoint = (startPosition + targetPosition) / 2
-        
-        -- Обновляем трейсер
-        aimbotTracer.Size = Vector3new(0.1, 0.1, distance)
-        aimbotTracer.CFrame = CFramenew(midPoint, targetPosition)
-        aimbotTracer.Color = aimbotColor
-        aimbotTracer.Parent = workspace
-    end
-    
-    -- Переменные для RageBot
-    local rageBotEnabled = false
-    local rageBotConnection = nil
-    local targetingMode = "Closest"
-    local selectedHitParts = {Head = true} -- По умолчанию только голова
-    local overrideEnabled = false
-    local overrideHitParts = {Head = true} -- Override хитпарты
-    
-    -- Система приоритетов для R6 частей тела
-    local partPriorities = {
-        Head = 10,
-        Torso = 8,
-        ["Left Arm"] = 6,
-        ["Right Arm"] = 6,
-        ["Left Leg"] = 4,
-        ["Right Leg"] = 4
-    }
-    
-    -- Функция проверки видимости части через raycast
-    local function isPartVisible(part)
-        local character = utility.getCharacter(LocalPlayer)
-        if not character then return false end
-        
-        local bulletStart = utility.getBulletStart()
-        local origin = bulletStart and bulletStart.Position or character.Head.Position
-        
-        local direction = (part.Position - origin).Unit * (part.Position - origin).Magnitude
-        
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-        -- Исключаем камеру и локального игрока (пули проходят сквозь нас)
-        raycastParams.FilterDescendantsInstances = {workspace.CurrentCamera, character}
-        
-        local result = workspace:Raycast(origin, direction, raycastParams)
-        
-        -- Если луч попал в часть цели или ничего не попал - часть видима
-        return not result or result.Instance:IsDescendantOf(part.Parent)
-    end
-    
-    -- Переменные для стабилизации выбора части
-    local lastSelectedPart = nil
-    local partStabilityTimer = 0
-    local PART_STABILITY_TIME = 0.05 -- Время стабилизации в секундах (уменьшено для быстрого отклика)
-    
-    -- Кэш для оптимизации raycast проверок
-    local visibilityCache = {}
-    local cacheExpireTime = 0.1 -- Кэш действует 100ms
-    
-    -- Оптимизированная функция проверки видимости с кэшированием
-    local function isPartVisibleCached(part)
-        local partId = tostring(part)
-        local currentTime = tick()
-        
-        -- Проверяем кэш
-        local cached = visibilityCache[partId]
-        if cached and (currentTime - cached.time) < cacheExpireTime then
-            return cached.visible
-        end
-        
-        -- Выполняем проверку и кэшируем результат
-        local visible = isPartVisible(part)
-        visibilityCache[partId] = {visible = visible, time = currentTime}
-        
-        return visible
-    end
-    
-    -- Функция динамического выбора части по приоритету и видимости (оптимизированная)
-    local function getBestVisiblePart(targetCharacter)
-        local bestPart = nil
-        
-        -- Выбираем какие хитпарты использовать (override или обычные)
-        local currentHitParts = overrideEnabled and overrideHitParts or selectedHitParts
-        
-        -- Быстрая проверка последней выбранной части (без raycast если возможно)
-        if lastSelectedPart and lastSelectedPart.Parent == targetCharacter and 
-           currentHitParts[lastSelectedPart.Name] then
-            local currentTime = tick()
-            -- Если прошло мало времени, возвращаем без дополнительных проверок
-            if (currentTime - partStabilityTimer) < PART_STABILITY_TIME then
-                return lastSelectedPart
-            end
-            -- Иначе проверяем видимость с кэшем
-            if isPartVisibleCached(lastSelectedPart) then
-                partStabilityTimer = currentTime
-                return lastSelectedPart
-            end
-        end
-        
-        -- Ищем лучшую доступную часть (сортируем по приоритету для быстрого поиска)
-        local sortedParts = {}
-        for partName, isSelected in pairs(currentHitParts) do
-            if isSelected then
-                local priority = partPriorities[partName] or 0
-                table.insert(sortedParts, {name = partName, priority = priority})
-            end
-        end
-        
-        -- Сортируем по убыванию приоритета
-        table.sort(sortedParts, function(a, b) return a.priority > b.priority end)
-        
-        -- Проверяем части в порядке приоритета
-        for _, partData in ipairs(sortedParts) do
-            local part = framework.getTargetPart(targetCharacter, partData.name)
-            if part and isPartVisibleCached(part) then
-                bestPart = part
-                break -- Прерываем на первой найденной части с высшим приоритетом
-            end
-        end
-        
-        -- Обновляем последнюю выбранную часть
-        if bestPart then
-            lastSelectedPart = bestPart
-            partStabilityTimer = tick()
-        end
-        
-        return bestPart
-    end
-    
-    -- Секция RageBot в первой колонне
-    local RageBotSection = RagebotPage:Section({
-        Name = "RageBot",
-        Side = 1
     })
     
-    -- Основной тоггл RageBot
-    local RageBotToggle = RageBotSection:Toggle({
-        Name = "Enable RageBot",
-        Flag = "RageBotEnabled",
+    -- Auto Reload toggle
+    local AutoReloadToggle = RagebotMain:Toggle({
+        Name = "Auto Reload",
         Default = false,
+        Flag = "AutoReload",
         Callback = function(value)
-            rageBotEnabled = value
+            AutoReloadEnabled = value
             
-            if rageBotEnabled then
-                -- Запускаем RageBot
-                rageBotConnection = RunService.RenderStepped:Connect(function()
-                    if not utility.canShoot() then
-                        framework.stopShooting()
-                        return
-                    end
-                    
-                    local target = nil
-                    
-                    -- Выбираем цель в зависимости от режима
-                    if targetingMode == "Closest" then
-                        target = framework.getClosestTarget()
-                    elseif targetingMode == "Cursor" then
-                        target = framework.getClosestToCursor()
-                    end
-                    
-                    if target then
-                        -- Динамически выбираем лучшую видимую часть
-                        local targetPart = getBestVisiblePart(target.character)
-                        if targetPart then
-                            framework.aimAt(targetPart.Position)
-                        end
+            if value then
+                -- Auto reload logic
+                task.spawn(function()
+                    while AutoReloadEnabled do
+                        task.wait(0.1)
+                        if not E:IsAlive() then continue end
                         
-                        -- Автоматически стреляем
-                        framework.shoot()
-                    else
-                        framework.stopShooting()
+                        local tool = E:GetHeld()
+                        if tool then
+                            local ammo = tool:FindFirstChild("Ammo")
+                            if ammo and ammo:IsA("IntValue") and ammo.Value <= 0 then
+                                -- Trigger reload
+                                game:GetService("ReplicatedStorage"):WaitForChild("Reload"):FireServer()
+                                task.wait(2) -- Wait for reload animation
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+    })
+end
+
+do -- Ragebot Settings section
+    local RagebotSettings = M:Section({Name = "Settings", Side = 2})
+    
+    -- Aim Part dropdown for R6
+    local AimPartDropdown = RagebotSettings:Dropdown({
+        Name = "Aim Part",
+        Items = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"},
+        Default = "Head",
+        Flag = "RagebotAimPart",
+        Callback = function(value)
+            AimPart = value
+        end
+    })
+end
+
+do -- Ragebot Debug section
+    local RagebotDebug = M:Section({Name = "Debug", Side = 1})
+    
+    -- Show Aimbot toggle
+    local ShowAimbotToggle = RagebotDebug:Toggle({
+        Name = "Show Aimbot",
+        Default = false,
+        Flag = "ShowAimbot",
+        Callback = function(value)
+            ShowAimbot = value
+            
+            if value then
+                -- Create visualization
+                task.spawn(function()
+                    while ShowAimbot do
+                        task.wait()
+                        if not E:IsAlive() then continue end
+                        
+                        local character = g.Character
+                        if character then
+                            local aimpos = character:FindFirstChild("aimpos")
+                            if aimpos and aimpos:IsA("Vector3Value") then
+                                local tool = E:GetHeld()
+                                if tool then
+                                    local bulletStart = tool:FindFirstChild("BulletStart")
+                                    if bulletStart then
+                                        -- Clean old visualization
+                                        if AimbotVisualization then
+                                            if type(AimbotVisualization) == "table" then
+                                                for _, v in pairs(AimbotVisualization) do
+                                                    if v and v.Parent then
+                                                        v:Destroy()
+                                                    end
+                                                end
+                                            else
+                                                if AimbotVisualization and AimbotVisualization.Parent then
+                                                    AimbotVisualization:Destroy()
+                                                end
+                                            end
+                                        end
+                                        
+                                        if AimbotVisualizationType == "Beam" then
+                                            -- Create beam visualization
+                                            local attachment0 = Instance.new("Attachment")
+                                            attachment0.Position = bulletStart.Position
+                                            attachment0.Parent = workspace.Terrain
+                                            
+                                            local attachment1 = Instance.new("Attachment")
+                                            attachment1.Position = aimpos.Value
+                                            attachment1.Parent = workspace.Terrain
+                                            
+                                            local beam = Instance.new("Beam")
+                                            beam.Attachment0 = attachment0
+                                            beam.Attachment1 = attachment1
+                                            beam.Width0 = 0.1
+                                            beam.Width1 = 0.1
+                                            beam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
+                                            beam.Transparency = NumberSequence.new(0.5)
+                                            beam.FaceCamera = true
+                                            beam.Parent = workspace
+                                            
+                                            AimbotVisualization = {beam, attachment0, attachment1}
+                                        else
+                                            -- Create 3D part visualization
+                                            local part = Instance.new("Part")
+                                            part.Size = Vector3.new(0.2, 0.2, (bulletStart.Position - aimpos.Value).Magnitude)
+                                            part.CFrame = CFrame.lookAt(bulletStart.Position, aimpos.Value) * CFrame.new(0, 0, -part.Size.Z/2)
+                                            part.Anchored = true
+                                            part.CanCollide = false
+                                            part.Material = Enum.Material.Neon
+                                            part.BrickColor = BrickColor.new("Really red")
+                                            part.Transparency = 0.5
+                                            part.Parent = workspace
+                                            
+                                            AimbotVisualization = part
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- Clean up when disabled
+                    if AimbotVisualization then
+                        if type(AimbotVisualization) == "table" then
+                            for _, v in pairs(AimbotVisualization) do
+                                v:Destroy()
+                            end
+                        else
+                            AimbotVisualization:Destroy()
+                        end
+                        AimbotVisualization = nil
                     end
                 end)
             else
-                -- Останавливаем RageBot
-                if rageBotConnection then
-                    rageBotConnection:Disconnect()
-                    rageBotConnection = nil
+                -- Clean up visualization
+                if AimbotVisualization then
+                    if type(AimbotVisualization) == "table" then
+                        for _, v in pairs(AimbotVisualization) do
+                            v:Destroy()
+                        end
+                    else
+                        AimbotVisualization:Destroy()
+                    end
+                    AimbotVisualization = nil
                 end
-                framework.stopShooting()
             end
         end
     })
     
-    -- Режим таргетинга
-    RageBotSection:Dropdown({
-        Name = "Target Mode",
-        Flag = "RageBotTargetMode",
-        Items = {"Closest", "Cursor"},
-        Default = "Closest",
+    -- Visualization Type dropdown
+    local VisualizationDropdown = RagebotDebug:Dropdown({
+        Name = "Visualization Type",
+        Items = {"Beam", "3D Part"},
+        Default = "Beam",
+        Flag = "AimbotVisualizationType",
         Callback = function(value)
-            targetingMode = value
-        end
-    })
-    
-    -- Hit Parts мульти-выбор (R6 части)
-    RageBotSection:Dropdown({
-        Name = "Hit Parts",
-        Flag = "RageBotHitParts",
-        Items = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"},
-        Default = {"Head"},
-        Multi = true,
-        Callback = function(values)
-            -- Очищаем старые выборы
-            selectedHitParts = {}
-            -- Добавляем новые
-            for _, partName in ipairs(values) do
-                selectedHitParts[partName] = true
-            end
-        end
-    })
-    
-    -- Секция Hitpart Override во второй колонне
-    local HitpartOverrideSection = RagebotPage:Section({
-        Name = "Hitpart Override",
-        Side = 2
-    })
-    
-    -- Объявляем переменную для кейбинда
-    local _OverrideKeybind
-    
-    -- Override тоггл с кейбиндом
-    local OverrideToggle = HitpartOverrideSection:Toggle({
-        Name = "Enable Override",
-        Flag = "HitpartOverride",
-        Default = false,
-        Callback = function(value)
-            overrideEnabled = value
-            -- Сбрасываем последнюю выбранную часть при переключении
-            lastSelectedPart = nil
-            partStabilityTimer = 0
-            -- Обновляем состояние в KeybindList
-            if _OverrideKeybind and _OverrideKeybind.KeybindListItem then
-                _OverrideKeybind.KeybindListItem:SetStatus(value)
-            end
-        end
-    })
-    
-    -- Кейбинд для переключения override
-    _OverrideKeybind = OverrideToggle:Keybind({
-        Name = "Override Key",
-        Flag = "HitpartOverrideKey",
-        Mode = "Toggle",
-        Default = Enum.KeyCode.V,
-        Callback = function(toggled)
-            -- При нажатии кейбинда переключаем тоггл
-            OverrideToggle:Set(toggled)
-        end
-    })
-    
-    -- Override Hit Parts мульти-выбор
-    HitpartOverrideSection:Dropdown({
-        Name = "Override Parts",
-        Flag = "OverrideHitParts",
-        Items = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"},
-        Default = {"Head"},
-        Multi = true,
-        Callback = function(values)
-            -- Очищаем старые выборы
-            overrideHitParts = {}
-            -- Добавляем новые
-            for _, partName in ipairs(values) do
-                overrideHitParts[partName] = true
-            end
-            -- Сбрасываем последнюю выбранную часть при изменении
-            if overrideEnabled then
-                lastSelectedPart = nil
-                partStabilityTimer = 0
-            end
-        end
-    })
-    
-    -- Show Aimbot тоггл с колорпикером
-    local ShowAimbotToggle = RageBotSection:Toggle({
-        Name = "Show Aimbot",
-        Flag = "RageBotShowAimbot",
-        Default = false,
-        Callback = function(value)
-            showAimbot = value
+            AimbotVisualizationType = value
             
-            if showAimbot then
-                -- Создаем трейсер если его нет
-                if not aimbotTracer then
-                    aimbotTracer = framework.createTracer()
+            -- Update visualization if active
+            if ShowAimbot and AimbotVisualization then
+                if type(AimbotVisualization) == "table" then
+                    for _, v in pairs(AimbotVisualization) do
+                        v:Destroy()
+                    end
+                else
+                    AimbotVisualization:Destroy()
                 end
-                
-                -- Показываем трейсер если есть текущая позиция
-                if currentAimPosition then
-                    framework.updateTracer(currentAimPosition)
-                end
-            else
-                -- Скрываем трейсер
-                if aimbotTracer then
-                    aimbotTracer.Parent = nil
-                end
-            end
-        end
-    })
-    
-    -- Колорпикер для трейсера
-    ShowAimbotToggle:Colorpicker({
-        Name = "Tracer Color",
-        Flag = "RageBotTracerColor",
-        Default = Color3fromRGB(255, 0, 0),
-        Alpha = 0.5,
-        Callback = function(color, alpha)
-            aimbotColor = color
-            if aimbotTracer then
-                aimbotTracer.Color = color
-                aimbotTracer.Transparency = alpha
+                AimbotVisualization = nil
             end
         end
     })
 end
 
-local VisualsPage = Window:Page({
-    Name = "Visuals",
-    Columns = 2
-})
-local MiscPage = Window:Page({
-    Name = "Misc",
-    Columns = 2
-})
-local AntiAimPage = Window:Page({
-    Name = "AntiAim",
-    Columns = 2
-})
--- HUD элементы (изолированы в блоке)
 do
-    local Watermark = Library:Watermark("Fentanyl | " .. LocalPlayer.Name .. " | " .. os.date("%y.%m.%d") .. " | Premium")
-    local KeybindList = Library:KeybindList()
-    
-    -- Скрываем по умолчанию
-    if Watermark then
-        Watermark:SetVisibility(false)
+    local Q = K:Watermark("Fentanyl | " .. g.Name .. " | " .. os.date("%y.%m.%d") .. " | Premium")
+    local R = K:KeybindList()
+    if Q then
+        Q:SetVisibility(false)
     end
-    if KeybindList then
-        KeybindList:SetVisibility(false)
+    if R then
+        R:SetVisibility(false)
     end
-    
-    -- Делаем глобально доступными для тогглов
-    _G.Watermark = Watermark
-    _G.KeybindList = KeybindList
+    _G.Watermark = Q
+    _G.KeybindList = R
 end
-
-
--- Settings вкладка (изолирована в блоке)
 do
-    local SettingsPage = Window:Page({
-        Name = "Settings",
-        Columns = 2
-    })
-
-    -- Config Manager Section
-    local ConfigSection = SettingsPage:Section({
-        Name = "Config",
-        Side = 1
-    })
-
-    -- Переменные для конфиг менеджера
-    local selectedConfig = ""  -- Выбранный из дропдауна
-    local newConfigName = ""   -- Введенный в текстбокс
-    local configList = {}
-
-    -- Создание папок если их нет
+    local S = L:Page({Name = "Settings", Columns = 2})
+    local T = S:Section({Name = "Config", Side = 1})
+    local U = ""
+    local V = ""
+    local W = {}
     do
         if not isfolder("fentanyl") then
             makefolder("fentanyl")
@@ -811,409 +699,347 @@ do
             makefolder("fentanyl/Configs")
         end
     end
-
-    -- Функция для обновления списка конфигов
-    local function updateConfigList()
-        local configList = {}
+    local function X()
+        local W = {}
         if isfolder("fentanyl/Configs") then
-            for _, file in ipairs(listfiles("fentanyl/Configs")) do
-                -- Нормализуем пути - заменяем \ на / и убираем директорию
-                local name = file:gsub("\\", "/")
-                name = name:gsub("fentanyl/Configs/", "")
-                insert(configList, name)
+            for J, Y in ipairs(listfiles("fentanyl/Configs")) do
+                local Z = Y:gsub("\\", "/")
+                Z = Z:gsub("fentanyl/Configs/", "")
+                p(W, Z)
             end
         end
-        return configList
+        return W
     end
-
-    -- Листбокс для выбора конфигов
-    local ConfigList = ConfigSection:Listbox({
-        Name = "Select Config",
-        Items = updateConfigList(),
-        Default = "",
-        Flag = "SelectedConfig",
-        Callback = function(value)
-            selectedConfig = value
-            print("Selected config:", value)
-        end
-    })
-
-    -- Текстбокс для имени нового конфига
-    local ConfigNameBox = ConfigSection:Textbox({
-        Name = "",
-        Default = "",
-        Placeholder = "Enter config name...",
-        Flag = "ConfigName",
-        Callback = function(value)
-            newConfigName = value
-        end
-    })
-
-    -- Кнопка создания конфига
-    local CreateButton = ConfigSection:Button({
-        Name = "Create Config",
-        Callback = function()
-            if newConfigName and newConfigName ~= "" then
-                local configName = newConfigName:gsub("%.json$", "") .. ".json"
-                local configPath = "fentanyl/Configs/" .. configName
-                
-                if not isfile(configPath) then
-                    -- Получаем данные конфига и сохраняем
-                    local configData = Library:GetConfig()
-                    writefile(configPath, configData)
-                    Library:Notification("Config created: " .. configName, 3, Color3fromRGB(0, 255, 0))
-                    ConfigList:Refresh(updateConfigList())
+    local _ =
+        T:Listbox(
+        {Name = "Select Config", Items = X(), Default = "", Flag = "SelectedConfig", Callback = function(a0)
+                U = a0
+                print("Selected config:", a0)
+            end}
+    )
+    local a1 =
+        T:Textbox(
+        {Name = "", Default = "", Placeholder = "Enter config name...", Flag = "ConfigName", Callback = function(a0)
+                V = a0
+            end}
+    )
+    local a2 =
+        T:Button(
+        {Name = "Create Config", Callback = function()
+                if V and V ~= "" then
+                    local a3 = V:gsub("%.json$", "") .. ".json"
+                    local a4 = "fentanyl/Configs/" .. a3
+                    if not isfile(a4) then
+                        local a5 = K:GetConfig()
+                        writefile(a4, a5)
+                        K:Notification("Config created: " .. a3, 3, z(0, 255, 0))
+                        _:Refresh(X())
+                    else
+                        K:Notification("Config already exists: " .. a3, 3, z(255, 0, 0))
+                    end
                 else
-                    Library:Notification("Config already exists: " .. configName, 3, Color3fromRGB(255, 0, 0))
+                    K:Notification("Please enter a config name", 3, z(255, 255, 0))
                 end
-            else
-                Library:Notification("Please enter a config name", 3, Color3fromRGB(255, 255, 0))
-            end
-        end
-    })
-
-    -- Кнопка сохранения конфига
-    local SaveButton = ConfigSection:Button({
-        Name = "Save Config",
-        Callback = function()
-            local configName
-            if selectedConfig and selectedConfig ~= "" then
-                configName = selectedConfig
-            elseif newConfigName and newConfigName ~= "" then
-                configName = newConfigName:gsub("%.json$", "") .. ".json"
-            end
-            
-            if configName then
-                local configPath = "fentanyl/Configs/" .. configName
-                local configData = Library:GetConfig()
-                writefile(configPath, configData)
-                Library:Notification("Config saved: " .. configName, 3, Color3fromRGB(0, 255, 0))
-                ConfigList:Refresh(updateConfigList())
-            else
-                Library:Notification("Please select or enter a config name", 3, Color3fromRGB(255, 255, 0))
-            end
-        end
-    })
-
-    -- Кнопка загрузки конфига
-    local LoadButton = ConfigSection:Button({
-        Name = "Load Config",
-        Callback = function()
-            if selectedConfig and selectedConfig ~= "" then
-                local configPath = "fentanyl/Configs/" .. selectedConfig
-                
-                if isfile(configPath) then
-                    local configData = readfile(configPath)
-                    Library:LoadConfig(configData)
-                    Library:Notification("Config loaded: " .. selectedConfig, 3, Color3fromRGB(0, 255, 0))
+            end}
+    )
+    local a6 =
+        T:Button(
+        {Name = "Save Config", Callback = function()
+                local a3
+                if U and U ~= "" then
+                    a3 = U
+                elseif V and V ~= "" then
+                    a3 = V:gsub("%.json$", "") .. ".json"
+                end
+                if a3 then
+                    local a4 = "fentanyl/Configs/" .. a3
+                    local a5 = K:GetConfig()
+                    writefile(a4, a5)
+                    K:Notification("Config saved: " .. a3, 3, z(0, 255, 0))
+                    _:Refresh(X())
                 else
-                    Library:Notification("Config not found: " .. selectedConfig, 3, Color3fromRGB(255, 0, 0))
+                    K:Notification("Please select or enter a config name", 3, z(255, 255, 0))
                 end
-            else
-                Library:Notification("Please select a config to load", 3, Color3fromRGB(255, 255, 0))
-            end
-        end
-    })
-
-    -- Кнопка удаления конфига
-    local DeleteButton = ConfigSection:Button({
-        Name = "Delete Config",
-        Risky = true,
-        Callback = function()
-            if selectedConfig and selectedConfig ~= "" then
-                local configPath = "fentanyl/Configs/" .. selectedConfig
-                print("Trying to delete config at path:", configPath)
-                print("File exists:", isfile(configPath))
-                
-                if isfile(configPath) then
-                    delfile(configPath)
-                    Library:Notification("Config deleted: " .. selectedConfig, 3, Color3fromRGB(0, 255, 0))
-                    ConfigList:Refresh(updateConfigList())
-                    selectedConfig = ""
+            end}
+    )
+    local a7 =
+        T:Button(
+        {Name = "Load Config", Callback = function()
+                if U and U ~= "" then
+                    local a4 = "fentanyl/Configs/" .. U
+                    if isfile(a4) then
+                        local a5 = readfile(a4)
+                        K:LoadConfig(a5)
+                        K:Notification("Config loaded: " .. U, 3, z(0, 255, 0))
+                    else
+                        K:Notification("Config not found: " .. U, 3, z(255, 0, 0))
+                    end
                 else
-                    Library:Notification("Config not found at: " .. configPath, 5, Color3fromRGB(255, 0, 0))
+                    K:Notification("Please select a config", 3, z(255, 255, 0))
                 end
-            else
-                Library:Notification("Please select a config to delete", 3, Color3fromRGB(255, 255, 0))
+            end}
+    )
+    local a8 =
+        T:Button(
+        {Name = "Delete Config", Risky = true, Callback = function()
+                if U and U ~= "" then
+                    local a4 = "fentanyl/Configs/" .. U
+                    print("Trying to delete config at path:", a4)
+                    print("File exists:", isfile(a4))
+                    if isfile(a4) then
+                        delfile(a4)
+                        K:Notification("Config deleted: " .. U, 3, z(0, 255, 0))
+                        _:Refresh(X())
+                        U = ""
+                    else
+                        K:Notification("Config not found: " .. a4, 5, z(255, 0, 0))
+                    end
+                else
+                    K:Notification("Please select a config", 3, z(255, 255, 0))
+                end
+            end}
+    )
+    local a9 =
+        T:Button(
+        {Name = "Refresh Config List", Callback = function()
+                _:Refresh(X())
+                K:Notification("Config list refreshed", 2, z(0, 255, 0))
+            end}
+    )
+    local aa = S:Section({Name = "Theming", Side = 2})
+    local ab = aa:Label("Accent Color", "Left")
+    local ac =
+        ab:Colorpicker(
+        {
+            Name = "Accent Color",
+            Default = z(31, 226, 130),
+            Alpha = 1,
+            Flag = "ThemeAccentColor",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Accent", ad)
+                if L.GradientTitle and L.GradientTitle.Enabled then
+                    L.GradientTitle.Start = ad
+                    L.GradientTitle.Middle = ad
+                    L.GradientTitle.End = ad
+                end
             end
-        end
-    })
-
-    -- Кнопка обновления списка конфигов
-    local RefreshButton = ConfigSection:Button({
-        Name = "Refresh Config List",
-        Callback = function()
-            ConfigList:Refresh(updateConfigList())
-            Library:Notification("Config list refreshed", 2, Color3fromRGB(0, 255, 0))
-        end
-    })
-
-
-    -- Theme Customization Section
-    local ThemeSection = SettingsPage:Section({
-        Name = "Theming",
-        Side = 2
-    })
-
-    -- Accent Color Picker
-    local AccentLabel = ThemeSection:Label("Accent Color", "Left")
-
-    local _AccentColorPicker = AccentLabel:Colorpicker({
-        Name = "Accent Color",
-        Default = Color3fromRGB(31, 226, 130),
-        Alpha = 1,
-        Flag = "ThemeAccentColor",
-        Callback = function(color, alpha)
-            -- Обновляем акцентный цвет в теме
-            Library:ChangeTheme("Accent", color)
-            
-            -- Обновляем градиент заголовка окна
-            if Window.GradientTitle and Window.GradientTitle.Enabled then
-                Window.GradientTitle.Start = color
-                Window.GradientTitle.Middle = color
-                Window.GradientTitle.End = color
+        }
+    )
+    local af = aa:Label("Window Background", "Left")
+    local ag =
+        af:Colorpicker(
+        {
+            Name = "Window Background",
+            Default = z(43, 43, 43),
+            Alpha = 1,
+            Flag = "ThemeWindowBackground",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Window Background", ad)
             end
-        end
-    })
-
-    -- Window Background Color Picker
-    local WindowBgLabel = ThemeSection:Label("Window Background", "Left")
-    local _WindowBgColorPicker = WindowBgLabel:Colorpicker({
-        Name = "Window Background",
-        Default = Color3fromRGB(43, 43, 43),
-        Alpha = 1,
-        Flag = "ThemeWindowBackground",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Window Background", color)
-        end
-    })
-
-    -- Text Color Picker
-    local TextLabel = ThemeSection:Label("Text Color", "Left")
-    local _TextColorPicker = TextLabel:Colorpicker({
-        Name = "Text Color",
-        Default = Color3fromRGB(180, 180, 180),
-        Alpha = 1,
-        Flag = "ThemeTextColor",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Text", color)
-        end
-    })
-
-    -- Section Background Color Picker
-    local SectionBgLabel = ThemeSection:Label("Section Background", "Left")
-    local _SectionBgColorPicker = SectionBgLabel:Colorpicker({
-        Name = "Section Background",
-        Default = Color3fromRGB(19, 19, 19),
-        Alpha = 1,
-        Flag = "ThemeSectionBackground",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Section Background", color)
-        end
-    })
-
-    -- Element Color Picker
-    local ElementLabel = ThemeSection:Label("Element Color", "Left")
-    local _ElementColorPicker = ElementLabel:Colorpicker({
-        Name = "Element Color",
-        Default = Color3fromRGB(63, 63, 63),
-        Alpha = 1,
-        Flag = "ThemeElementColor",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Element", color)
-        end
-    })
-
-    -- Border Color Picker
-    local BorderLabel = ThemeSection:Label("Border Color", "Left")
-    local _BorderColorPicker = BorderLabel:Colorpicker({
-        Name = "Border Color",
-        Default = Color3fromRGB(68, 68, 68),
-        Alpha = 1,
-        Flag = "ThemeBorderColor",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Border", color)
-        end
-    })
-
-    -- Outline Color Picker
-    local OutlineLabel = ThemeSection:Label("Outline Color", "Left")
-    local _OutlineColorPicker = OutlineLabel:Colorpicker({
-        Name = "Outline Color",
-        Default = Color3fromRGB(0, 0, 0),
-        Alpha = 1,
-        Flag = "ThemeOutlineColor",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Outline", color)
-        end
-    })
-
-    -- Dark Liner Color Picker
-    local DarkLinerLabel = ThemeSection:Label("Dark Liner", "Left")
-    local _DarkLinerColorPicker = DarkLinerLabel:Colorpicker({
-        Name = "Dark Liner",
-        Default = Color3fromRGB(56, 56, 56),
-        Alpha = 1,
-        Flag = "ThemeDarkLiner",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Dark Liner", color)
-        end
-    })
-
-    -- Risky Color Picker
-    local RiskyLabel = ThemeSection:Label("Risky Color", "Left")
-    local _RiskyColorPicker = RiskyLabel:Colorpicker({
-        Name = "Risky Color",
-        Default = Color3fromRGB(255, 50, 50),
-        Alpha = 1,
-        Flag = "ThemeRiskyColor",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Risky", color)
-        end
-    })
-
-    -- Inline Color Picker
-    local InlineLabel = ThemeSection:Label("Inline Color", "Left")
-    local _InlineColorPicker = InlineLabel:Colorpicker({
-        Name = "Inline Color",
-        Default = Color3fromRGB(12, 12, 12),
-        Alpha = 1,
-        Flag = "ThemeInlineColor",
-        Callback = function(color, alpha)
-            Library:ChangeTheme("Inline", color)
-        end
-    })
-
-    -- HUD Section
-    local HUDSection = SettingsPage:Section({
-        Name = "HUD",
-        Side = 2
-    })
-
-    -- Keybinds Toggle
-    local _KeybindsToggle = HUDSection:Toggle({
-        Name = "Keybinds",
-        Default = false,
-        Flag = "HUDKeybinds",
-        Callback = function(value)
-            if _G.KeybindList then
-                _G.KeybindList:SetVisibility(value)
+        }
+    )
+    local ah = aa:Label("Text Color", "Left")
+    local ai =
+        ah:Colorpicker(
+        {
+            Name = "Text Color",
+            Default = z(180, 180, 180),
+            Alpha = 1,
+            Flag = "ThemeTextColor",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Text", ad)
             end
-        end
-    })
-
-    -- Watermark Toggle
-    local _WatermarkToggle = HUDSection:Toggle({
-        Name = "Watermark",
-        Default = false,
-        Flag = "HUDWatermark",
-        Callback = function(value)
-            if _G.Watermark then
-                _G.Watermark:SetVisibility(value)
+        }
+    )
+    local aj = aa:Label("Section Background", "Left")
+    local ak =
+        aj:Colorpicker(
+        {
+            Name = "Section Background",
+            Default = z(19, 19, 19),
+            Alpha = 1,
+            Flag = "ThemeSectionBackground",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Section Background", ad)
             end
-        end
-    })
-
-    -- GUI Toggle Label с кейбиндом
-    local GUIToggleLabel = HUDSection:Label("GUI", "Left")
-    local _GUIKeybind = GUIToggleLabel:Keybind({
-        Name = "Toggle GUI",
-        Mode = "Toggle",
-        Default = Enum.KeyCode.Insert,
-        Flag = "GUIToggleKey",
-        Callback = function(toggled)
-            -- Переключаем видимость GUI используя встроенный метод библиотеки
-            if Window and Window.SetOpen then
-                Window:SetOpen(not Window.IsOpen)
+        }
+    )
+    local al = aa:Label("Element Color", "Left")
+    local am =
+        al:Colorpicker(
+        {
+            Name = "Element Color",
+            Default = z(63, 63, 63),
+            Alpha = 1,
+            Flag = "ThemeElementColor",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Element", ad)
             end
-        end
-    })
-    
-    -- Синхронизируем состояние кейбинда с состоянием GUI
+        }
+    )
+    local an = aa:Label("Border Color", "Left")
+    local ao =
+        an:Colorpicker(
+        {
+            Name = "Border Color",
+            Default = z(68, 68, 68),
+            Alpha = 1,
+            Flag = "ThemeBorderColor",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Border", ad)
+            end
+        }
+    )
+    local ap = aa:Label("Outline Color", "Left")
+    local aq =
+        ap:Colorpicker(
+        {
+            Name = "Outline Color",
+            Default = z(0, 0, 0),
+            Alpha = 1,
+            Flag = "ThemeOutlineColor",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Outline", ad)
+            end
+        }
+    )
+    local ar = aa:Label("Dark Liner", "Left")
+    local as =
+        ar:Colorpicker(
+        {Name = "Dark Liner", Default = z(56, 56, 56), Alpha = 1, Flag = "ThemeDarkLiner", Callback = function(ad, ae)
+                K:ChangeTheme("Dark Liner", ad)
+            end}
+    )
+    local at = aa:Label("Risky Color", "Left")
+    local au =
+        at:Colorpicker(
+        {
+            Name = "Risky Color",
+            Default = z(255, 50, 50),
+            Alpha = 1,
+            Flag = "ThemeRiskyColor",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Risky", ad)
+            end
+        }
+    )
+    local av = aa:Label("Inline Color", "Left")
+    local aw =
+        av:Colorpicker(
+        {
+            Name = "Inline Color",
+            Default = z(12, 12, 12),
+            Alpha = 1,
+            Flag = "ThemeInlineColor",
+            Callback = function(ad, ae)
+                K:ChangeTheme("Inline", ad)
+            end
+        }
+    )
+    local ax = S:Section({Name = "HUD", Side = 2})
+    local ay =
+        ax:Toggle(
+        {Name = "Keybinds", Default = false, Flag = "HUDKeybinds", Callback = function(a0)
+                if _G.KeybindList then
+                    _G.KeybindList:SetVisibility(a0)
+                end
+            end}
+    )
+    local az =
+        ax:Toggle(
+        {Name = "Watermark", Default = false, Flag = "HUDWatermark", Callback = function(a0)
+                if _G.Watermark then
+                    _G.Watermark:SetVisibility(a0)
+                end
+            end}
+    )
+    local aA = ax:Label("GUI", "Left")
+    local aB =
+        aA:Keybind(
+        {
+            Name = "Toggle GUI",
+            Mode = "Toggle",
+            Default = Enum.KeyCode.Insert,
+            Flag = "GUIToggleKey",
+            Callback = function(aC)
+                if L and L.SetOpen then
+                    L:SetOpen(not L.IsOpen)
+                end
+            end
+        }
+    )
     do
-        local originalSetOpen = Window.SetOpen
-        Window.SetOpen = function(self, state)
-            originalSetOpen(self, state)
-            -- Обновляем состояние кейбинда в соответствии с состоянием GUI
-            if _GUIKeybind and _GUIKeybind.Toggled ~= self.IsOpen then
-                _GUIKeybind.Toggled = self.IsOpen
-                -- Обновляем отображение в KeybindList
-                if _GUIKeybind.KeybindListItem then
-                    _GUIKeybind.KeybindListItem:SetStatus(self.IsOpen)
+        local aD = L.SetOpen
+        L.SetOpen = function(self, aE)
+            aD(self, aE)
+            if aB and aB.Toggled ~= self.IsOpen then
+                aB.Toggled = self.IsOpen
+                if aB.KeybindListItem then
+                    aB.KeybindListItem:SetStatus(self.IsOpen)
                 end
             end
         end
     end
-
-    -- Server Section (изолирована в блоке)
     do
-        local ServerSection = SettingsPage:Section({
-            Name = "Server",
-            Side = 2
-        })
-
-        -- Copy GameID Button
-        local _CopyGameIDButton = ServerSection:Button({
-            Name = "Copy GameID",
-            Callback = function()
-                setclipboard(tostring(game.GameId))
-                Library:Notification("GameID copied to clipboard", 2, Color3fromRGB(0, 255, 0))
-            end
-        })
-
-        -- Copy JobID Button
-        local _CopyJobIDButton = ServerSection:Button({
-            Name = "Copy JobID",
-            Callback = function()
-                setclipboard(game.JobId)
-                Library:Notification("JobID copied to clipboard", 2, Color3fromRGB(0, 255, 0))
-            end
-        })
-
-        -- Copy Join Script Button
-        local _CopyJoinScriptButton = ServerSection:Button({
-            Name = "Copy Join Script",
-            Callback = function()
-                local joinScript = 'game:GetService("TeleportService"):TeleportToPlaceInstance(' 
-                    .. game.PlaceId 
-                    .. ', "' 
-                    .. game.JobId 
-                    .. '", game.Players.LocalPlayer)'
-                setclipboard(joinScript)
-                Library:Notification("Join script copied to clipboard", 2, Color3fromRGB(0, 255, 0))
-            end
-        })
-
-        -- Rejoin Game Button
-        local _RejoinButton = ServerSection:Button({
-            Name = "Rejoin Game",
-            Callback = function()
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-            end
-        })
-
-        -- Join New Server Button
-        local _JoinNewServerButton = ServerSection:Button({
-            Name = "Join New Server",
-            Callback = function()
-                local success, apiRequest = pcall(function()
-                    return HttpService:JSONDecode(
-                        game:HttpGetAsync(
-                            "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
-                        )
+        local aF = S:Section({Name = "Server", Side = 2})
+        local aG =
+            aF:Button(
+            {Name = "Copy GameID", Callback = function()
+                    setclipboard(tostring(game.GameId))
+                    K:Notification("GameID copied to clipboard", 2, z(0, 255, 0))
+                end}
+        )
+        local aH =
+            aF:Button(
+            {Name = "Copy JobID", Callback = function()
+                    setclipboard(game.JobId)
+                    K:Notification("JobID copied to clipboard", 2, z(0, 255, 0))
+                end}
+        )
+        local aI =
+            aF:Button(
+            {
+                Name = "Copy Join Script",
+                Callback = function()
+                    local aJ =
+                        'game:GetService("TeleportService"):TeleportToPlaceInstance(' ..
+                        game.PlaceId .. ', "' .. game.JobId .. '", game.Players.LocalPlayer)'
+                    setclipboard(aJ)
+                    K:Notification("Join script copied to clipboard", 2, z(0, 255, 0))
+                end
+            }
+        )
+        local aK =
+            aF:Button(
+            {Name = "Rejoin Game", Callback = function()
+                    D:TeleportToPlaceInstance(game.PlaceId, game.JobId, g)
+                end}
+        )
+        local aL =
+            aF:Button(
+            {
+                Name = "Join New Server",
+                Callback = function()
+                    local aM, aN =
+                        pcall(
+                        function()
+                            return e:JSONDecode(
+                                game:HttpGetAsync(
+                                    "https://games.roblox.com/v1/games/" ..
+                                        game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+                                )
+                            )
+                        end
                     )
-                end)
-                
-                if success and apiRequest and apiRequest.data and #apiRequest.data > 0 then
-                    local data = apiRequest.data[random(1, #apiRequest.data)]
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, data.id)
-                else
-                    Library:Notification("Failed to get server list", 3, Color3fromRGB(255, 0, 0))
+                    if aM and aN and aN.data and #aN.data > 0 then
+                        local aO = aN.data[h(1, #aN.data)]
+                        D:TeleportToPlaceInstance(game.PlaceId, aO.id)
+                    else
+                        K:Notification("Failed to get server list", 3, z(255, 0, 0))
+                    end
                 end
-            end
-        })
-    end -- конец Server секции
-end -- конец Settings вкладки
-
--- Уведомление о загрузке скрипта
-Library:Notification("Script loaded, press Insert to toggle GUI", 4, Color3fromRGB(0, 255, 0))
+            }
+        )
+    end
+end
+K:Notification("Script loaded, press Insert to toggle GUI", 4, z(0, 255, 0))
