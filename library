@@ -666,6 +666,65 @@ local Library do
         end
     end
 
+    Library.IsInputFocused = function(self)
+        -- Проверяем, не находится ли пользователь в режиме ввода текста
+        local GuiService = game:GetService("GuiService")
+        local TextChatService = game:GetService("TextChatService")
+        
+        -- Проверка фокуса на TextBox элементах
+        if UserInputService:GetFocusedTextBox() then
+            return true
+        end
+        
+        -- Проверка открытого чата (старая система чата)
+        pcall(function()
+            local StarterGui = game:GetService("StarterGui")
+            local ChatFrame = LocalPlayer.PlayerGui:FindFirstChild("Chat")
+            if ChatFrame then
+                local ChatBar = ChatFrame:FindFirstChild("Frame") and ChatFrame.Frame:FindFirstChild("ChatBarParentFrame")
+                if ChatBar and ChatBar:FindFirstChild("Frame") and ChatBar.Frame:FindFirstChild("BoxFrame") then
+                    local TextBox = ChatBar.Frame.BoxFrame:FindFirstChild("Frame") and ChatBar.Frame.BoxFrame.Frame:FindFirstChild("ChatBar")
+                    if TextBox and TextBox:IsA("TextBox") and TextBox:IsFocused() then
+                        return true
+                    end
+                end
+            end
+        end)
+        
+        -- Проверка новой системы чата (TextChatService)
+        pcall(function()
+            if TextChatService.ChatInputBarConfiguration.Enabled then
+                local ChatInputBar = LocalPlayer.PlayerGui:FindFirstChild("ExperienceChat")
+                if ChatInputBar then
+                    local TextBox = ChatInputBar:FindFirstChild("appLayout") 
+                    if TextBox then
+                        TextBox = TextBox:FindFirstChild("chatInputBar")
+                        if TextBox then
+                            TextBox = TextBox:FindFirstChild("Background")
+                            if TextBox then
+                                TextBox = TextBox:FindFirstChild("Container")
+                                if TextBox then
+                                    TextBox = TextBox:FindFirstChild("TextContainer")
+                                    if TextBox then
+                                        TextBox = TextBox:FindFirstChild("TextBoxContainer")
+                                        if TextBox then
+                                            TextBox = TextBox:FindFirstChild("TextBox")
+                                            if TextBox and TextBox:IsA("TextBox") and TextBox:IsFocused() then
+                                                return true
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+        
+        return false
+    end
+
     Library.Unload = function(self)
         for Index, Value in self.Connections do 
             Value.Connection:Disconnect()
@@ -3822,6 +3881,11 @@ local Library do
 
         Library:Connect(UserInputService.InputBegan, function(Input)
             if tostring(Input.KeyCode) == Keybind.Key or tostring(Input.UserInputType) == Keybind.Key then
+                -- Проверяем, не находится ли пользователь в режиме ввода текста
+                if Library:IsInputFocused() then
+                    return
+                end
+                
                 if Keybind.Mode == "Toggle" then 
                     Keybind:Press()
                 elseif Keybind.Mode == "Hold" then 
@@ -3846,6 +3910,11 @@ local Library do
 
         Library:Connect(UserInputService.InputEnded, function(Input)
             if tostring(Input.KeyCode) == Keybind.Key or tostring(Input.UserInputType) == Keybind.Key then
+                -- Проверяем, не находится ли пользователь в режиме ввода текста
+                if Library:IsInputFocused() then
+                    return
+                end
+                
                 if Keybind.Mode == "Hold" then 
                     Keybind:Press(false)
                 end
@@ -4374,6 +4443,11 @@ local Library do
             end
 
             if tostring(Input.KeyCode) == Library.MenuKeybind or tostring(Input.UserInputType) == Library.MenuKeybind then
+                -- Проверяем, не находится ли пользователь в режиме ввода текста
+                if Library:IsInputFocused() then
+                    return
+                end
+                
                 Window:SetOpen(not Window.IsOpen)
             end
         end)
