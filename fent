@@ -9,7 +9,7 @@ local e = game:GetService("HttpService")
 local f = game:GetService("Lighting")
 local g = a.LocalPlayer
 local h, i = math.random, math.huge
-local j, k = math.floor, math.ceil
+local _j, k = math.floor, math.ceil
 local l, m = math.abs, math.sqrt
 local n, o = math.sin, math.cos
 local p, q = table.insert, table.remove
@@ -27,6 +27,8 @@ local z = Color3.fromRGB
 local A = UDim2.new
 local B = Vector3.new
 local C = CFrame.new
+local UDim2 = UDim2
+local Color3 = Color3
 local isfolder = isfolder
 local isfile = isfile
 local listfiles = listfiles
@@ -42,12 +44,12 @@ local Instance = Instance
 local ColorSequence = ColorSequence
 local NumberSequence = NumberSequence
 local Enum = Enum
-local hookmetamethod = hookmetamethod
-local checkcaller = checkcaller
-local newcclosure = newcclosure
+local hookmetamethod = hookmetamethod or function() end
+local checkcaller = checkcaller or function() return true end
+local newcclosure = newcclosure or function(f) return f end
 local getgenv = getgenv
 local task = task
-local wait = wait
+local _wait = wait
 local fireclickdetector = fireclickdetector
 local E = {}
 local F = {}
@@ -310,7 +312,7 @@ do -- Targeting Framework
                     end
                     
                     if dd.hum then
-                        b.Heartbeat:Wait()
+                        task.wait()
                         dd.hum_conn = dd.hum.HealthChanged:Connect(function(newHealth)
                             local maxHealth = dd.hum and dd.hum.MaxHealth or 0
                             if dd.last_health == nil or dd.last_max == nil or maxHealth ~= dd.last_max then
@@ -476,7 +478,7 @@ do -- Desync Framework
                 targetCF = state.targetCFrame or state.realCFrame
             end
             rootPart.CFrame = targetCF
-            desync_vars.RunService.RenderStepped:Wait()
+            task.wait()
             rootPart.CFrame = state.realCFrame
         end)
     end
@@ -713,17 +715,18 @@ do -- Ragebot Tab
             _G.TargetingFramework:OnTargetUpdate(function(targetInfo)
                 if K.Flags["NotifyOnSelected"] then
                     if targetInfo then
-                        K:Notification("Target selected: " .. targetInfo.name, 2, z(0, 255, 0))
+                        K:Notification("ragebot set to " .. targetInfo.name, 1, z(0, 255, 0))
                     else
-                        K:Notification("Target cleared", 2, z(255, 255, 0))
+                        K:Notification("ragebot set to nobody", 1, z(255, 255, 0))
                     end
                 end
             end)
             
             _G.TargetingFramework:OnHit(function(hitInfo)
                 if K.Flags["NotifyOnDamage"] and hitInfo then
-                    local damageText = t("%.1f damage to %s", hitInfo.damage, hitInfo.player.Name)
-                    K:Notification(damageText, 2, z(255, 100, 100))
+                    local healthPercent = math.floor((hitInfo.health / hitInfo.maxHealth) * 100)
+                    local damageText = t("Ragebot target %s hit for %.1f (%d%%)", hitInfo.player.Name, hitInfo.damage, healthPercent)
+                    K:Notification(damageText, 1, z(255, 100, 100))
                 end
             end)
         end
@@ -973,18 +976,18 @@ do -- Ragebot Tab
             isBuying = true -- Блокируем повторные вызовы
             
             -- Уведомление о начале цикла покупки
-            K:Notification("Buying armor...", 2, z(255, 255, 0))
+            K:Notification("Buying armor...", 1, z(255, 255, 0))
             
             -- Используем новый desync фреймворк для покупки
             if getgenv().DesyncLibrary then
                 local success = pcall(function()
                     -- Перемещаемся к объекту брони через новый desync API
                     getgenv().DesyncLibrary.movedesyncto(armorItem.Head.CFrame)
-                    wait(0.5)
+                    task.wait(0.5)
                     
                     -- Покупаем броню
                     fireclickdetector(armorItem.ClickDetector)
-                    wait(0.5)
+                    task.wait(0.5)
                     
                     -- Синхронизируемся с локальным игроком
                     getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
@@ -998,7 +1001,7 @@ do -- Ragebot Tab
                 end
                 
                 -- Уведомление о завершении цикла
-                K:Notification("Armor buyed, player synced", 2, z(0, 255, 0))
+                K:Notification("Armor buyed, player synced", 1, z(0, 255, 0))
             end
             
             isBuying = false -- Разблокируем после завершения
@@ -1012,7 +1015,7 @@ do -- Ragebot Tab
             
             if K.Flags["AutoArmorEnabled"] then
                 armorConnection = b.Heartbeat:Connect(function()
-                    wait(1)
+                    task.wait(1)
                     BuyArmor()
                 end)
             end
@@ -1024,16 +1027,8 @@ do -- Ragebot Tab
                 armorConnection:Disconnect()
                 armorConnection = nil
             end
-            -- Отключаем обработчики персонажа при остановке
-            if AutoArmorFramework.connections then
-                if AutoArmorFramework.connections.charRemoving then
-                    AutoArmorFramework.connections.charRemoving:Disconnect()
-                end
-                if AutoArmorFramework.connections.charAdded then
-                    AutoArmorFramework.connections.charAdded:Disconnect()
-                end
-            end
         end
+        AutoArmorFramework.connections = {}
         
         -- Обработка смерти игрока
         local function OnCharacterRemoving()
@@ -1058,10 +1053,8 @@ do -- Ragebot Tab
         local charAddedConn = g.CharacterAdded:Connect(OnCharacterAdded)
         
         -- Сохраняем подключения для возможного отключения
-        AutoArmorFramework.connections = {
-            charRemoving = charRemovingConn,
-            charAdded = charAddedConn
-        }
+        AutoArmorFramework.connections.charRemoving = charRemovingConn
+        AutoArmorFramework.connections.charAdded = charAddedConn
         
         -- Если персонаж уже существует
         if g.Character then
@@ -1130,13 +1123,13 @@ do -- Settings Tab
                     if not isfile(a4) then
                         local a5 = K:GetConfig()
                         writefile(a4, a5)
-                        K:Notification("Config created: " .. a3, 3, z(0, 255, 0))
+                        K:Notification("Config created: " .. a3, 1, z(0, 255, 0))
                         _:Refresh(X())
                     else
-                        K:Notification("Config already exists: " .. a3, 3, z(255, 0, 0))
+                        K:Notification("Config already exists: " .. a3, 1, z(255, 0, 0))
                     end
                 else
-                    K:Notification("Please enter a config name", 3, z(255, 255, 0))
+                    K:Notification("Please enter a config name", 1, z(255, 255, 0))
                 end
             end}
     )
@@ -1153,10 +1146,10 @@ do -- Settings Tab
                     local a4 = "fentanyl/Configs/" .. a3
                     local a5 = K:GetConfig()
                     writefile(a4, a5)
-                    K:Notification("Config saved: " .. a3, 3, z(0, 255, 0))
+                    K:Notification("Config saved: " .. a3, 1, z(0, 255, 0))
                     _:Refresh(X())
                 else
-                    K:Notification("Please select or enter a config name", 3, z(255, 255, 0))
+                    K:Notification("Please select or enter a config name", 1, z(255, 255, 0))
                 end
             end}
     )
@@ -1168,12 +1161,12 @@ do -- Settings Tab
                     if isfile(a4) then
                         local a5 = readfile(a4)
                         K:LoadConfig(a5)
-                        K:Notification("Config loaded: " .. U, 3, z(0, 255, 0))
+                        K:Notification("Config loaded: " .. U, 1, z(0, 255, 0))
                     else
-                        K:Notification("Config not found: " .. U, 3, z(255, 0, 0))
+                        K:Notification("Config not found: " .. U, 1, z(255, 0, 0))
                     end
                 else
-                    K:Notification("Please select a config", 3, z(255, 255, 0))
+                    K:Notification("Please select a config", 1, z(255, 255, 0))
                 end
             end}
     )
@@ -1186,14 +1179,14 @@ do -- Settings Tab
                     print("File exists:", isfile(a4))
                     if isfile(a4) then
                         delfile(a4)
-                        K:Notification("Config deleted: " .. U, 3, z(0, 255, 0))
+                        K:Notification("Config deleted: " .. U, 1, z(0, 255, 0))
                         _:Refresh(X())
                         U = ""
                     else
-                        K:Notification("Config not found: " .. a4, 5, z(255, 0, 0))
+                        K:Notification("Config not found: " .. a4, 1, z(255, 0, 0))
                     end
                 else
-                    K:Notification("Please select a config", 3, z(255, 255, 0))
+                    K:Notification("Please select a config", 1, z(255, 255, 0))
                 end
             end}
     )
@@ -1201,7 +1194,7 @@ do -- Settings Tab
         T:Button(
         {Name = "Refresh Config List", Callback = function()
                 _:Refresh(X())
-                K:Notification("Config list refreshed", 2, z(0, 255, 0))
+                K:Notification("Config list refreshed", 1, z(0, 255, 0))
             end}
     )
     local aa = S:Section({Name = "Theming", Side = 2})
@@ -1384,14 +1377,14 @@ do -- Settings Tab
             aF:Button(
             {Name = "Copy GameID", Callback = function()
                     setclipboard(tostring(game.GameId))
-                    K:Notification("GameID copied to clipboard", 2, z(0, 255, 0))
+                    K:Notification("GameID copied to clipboard", 1, z(0, 255, 0))
                 end}
         )
         local aH =
             aF:Button(
             {Name = "Copy JobID", Callback = function()
                     setclipboard(game.JobId)
-                    K:Notification("JobID copied to clipboard", 2, z(0, 255, 0))
+                    K:Notification("JobID copied to clipboard", 1, z(0, 255, 0))
                 end}
         )
         local aI =
@@ -1403,7 +1396,7 @@ do -- Settings Tab
                         'game:GetService("TeleportService"):TeleportToPlaceInstance(' ..
                         game.PlaceId .. ', "' .. game.JobId .. '", game.Players.LocalPlayer)'
                     setclipboard(aJ)
-                    K:Notification("Join script copied to clipboard", 2, z(0, 255, 0))
+                    K:Notification("Join script copied to clipboard", 1, z(0, 255, 0))
                 end
             }
         )
@@ -1433,11 +1426,11 @@ do -- Settings Tab
                         local aO = aN.data[h(1, #aN.data)]
                         D:TeleportToPlaceInstance(game.PlaceId, aO.id)
                     else
-                        K:Notification("Failed to get server list", 3, z(255, 0, 0))
+                        K:Notification("Failed to get server list", 1, z(255, 0, 0))
                     end
                 end
             }
         )
     end
 end
-K:Notification("Script loaded, press Insert to toggle GUI", 4, z(0, 255, 0))
+K:Notification("Script loaded, press Insert to toggle GUI", 1, z(0, 255, 0))
