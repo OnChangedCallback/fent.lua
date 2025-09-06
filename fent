@@ -267,8 +267,12 @@ do -- Targeting Framework
     end
     
     do -- Health Detection System
-        if not TargetingFramework._dd.conn then
+        TargetingFramework.StartHealthDetection = function()
+            if TargetingFramework._dd.conn then
+                TargetingFramework._dd.conn:Disconnect()
+            end
             TargetingFramework._dd.conn = b.Heartbeat:Connect(function()
+                
                 local dd = TargetingFramework._dd
                 local currentTarget = dd.override_player or (targeting_state and targeting_state.current or nil)
                 
@@ -332,6 +336,17 @@ do -- Targeting Framework
                     end
                 end
             end)
+        end
+        
+        TargetingFramework.StopHealthDetection = function()
+            if TargetingFramework._dd.conn then
+                TargetingFramework._dd.conn:Disconnect()
+                TargetingFramework._dd.conn = nil
+            end
+            if TargetingFramework._dd.hum_conn then
+                TargetingFramework._dd.hum_conn:Disconnect()
+                TargetingFramework._dd.hum_conn = nil
+            end
         end
     end
     
@@ -562,7 +577,10 @@ do -- Ragebot Tab
         Flag = "TargetingEnabled",
         Callback = function(aR)
             if _G.TargetingFramework then
-                if not aR then
+                if aR then
+                    _G.TargetingFramework.StartHealthDetection()
+                else
+                    _G.TargetingFramework.StopHealthDetection()
                     _G.TargetingFramework:ClearTargetInfo()
                     _G.TargetingFramework:ClearCurrentTarget()
                     if _G.targeting_state then
@@ -623,7 +641,13 @@ do -- Ragebot Tab
         Default = false,
         Flag = "ShowAimbot",
         Callback = function(bg)
-            -- Callback обрабатывается через beam logic
+            if _G.BeamVisualization then
+                if bg then
+                    _G.BeamVisualization.start()
+                else
+                    _G.BeamVisualization.stop()
+                end
+            end
         end
     })
     
@@ -884,22 +908,31 @@ do -- Ragebot Tab
             currentBeam.att1.WorldPosition = predictedPos
         end
         
-        beamConnection = b.Heartbeat:Connect(UpdateBeam)
+        -- НЕ создаем постоянное подключение, вместо этого будем создавать его при включении ShowAimbot
+        local function StartBeamVisualization()
+            if beamConnection then
+                beamConnection:Disconnect()
+            end
+            beamConnection = b.Heartbeat:Connect(UpdateBeam)
+        end
+        
+        local function StopBeamVisualization()
+            if beamConnection then
+                beamConnection:Disconnect()
+                beamConnection = nil
+            end
+            if currentBeam then
+                currentBeam.beam:Destroy()
+                currentBeam.att0:Destroy()
+                currentBeam.att1:Destroy()
+                currentBeam = nil
+            end
+        end
         
         _G.BeamVisualization = {
-            connection = beamConnection,
-            cleanup = function()
-                if beamConnection then
-                    beamConnection:Disconnect()
-                    beamConnection = nil
-                end
-                if currentBeam then
-                    currentBeam.beam:Destroy()
-                    currentBeam.att0:Destroy()
-                    currentBeam.att1:Destroy()
-                    currentBeam = nil
-                end
-            end
+            start = StartBeamVisualization,
+            stop = StopBeamVisualization,
+            cleanup = StopBeamVisualization
         }
     end
     
@@ -991,6 +1024,15 @@ do -- Ragebot Tab
                 armorConnection:Disconnect()
                 armorConnection = nil
             end
+            -- Отключаем обработчики персонажа при остановке
+            if AutoArmorFramework.connections then
+                if AutoArmorFramework.connections.charRemoving then
+                    AutoArmorFramework.connections.charRemoving:Disconnect()
+                end
+                if AutoArmorFramework.connections.charAdded then
+                    AutoArmorFramework.connections.charAdded:Disconnect()
+                end
+            end
         end
         
         -- Обработка смерти игрока
@@ -1011,9 +1053,15 @@ do -- Ragebot Tab
             end
         end
         
-        -- Подключаем обработчики смерти
-        g.CharacterRemoving:Connect(OnCharacterRemoving)
-        g.CharacterAdded:Connect(OnCharacterAdded)
+        -- Подключаем обработчики смерти с возможностью отключения
+        local charRemovingConn = g.CharacterRemoving:Connect(OnCharacterRemoving)
+        local charAddedConn = g.CharacterAdded:Connect(OnCharacterAdded)
+        
+        -- Сохраняем подключения для возможного отключения
+        AutoArmorFramework.connections = {
+            charRemoving = charRemovingConn,
+            charAdded = charAddedConn
+        }
         
         -- Если персонаж уже существует
         if g.Character then
