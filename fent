@@ -36,11 +36,19 @@ local delfile = delfile
 local makefolder = makefolder
 local setclipboard = setclipboard
 local D = game:GetService("TeleportService")
-local ps, run, uis, cam = a, b, c, workspace.CurrentCamera
-local math, v2, v3, tick = math, Vector2.new, Vector3.new, tick
-local LocalPlayer = g
+local cam = workspace.CurrentCamera
+local Vector2 = Vector2
+local Instance = Instance
+local ColorSequence = ColorSequence
+local NumberSequence = NumberSequence
+local Enum = Enum
 local hookmetamethod = hookmetamethod
 local checkcaller = checkcaller
+local newcclosure = newcclosure
+local getgenv = getgenv
+local task = task
+local wait = wait
+local fireclickdetector = fireclickdetector
 local E = {}
 local F = {}
 do
@@ -95,11 +103,11 @@ do -- Targeting Framework
         
         function utility:ToScreen(position)
             local screenPos, onScreen = cam:WorldToViewportPoint(position)
-            return v2(screenPos.X, screenPos.Y), onScreen
+            return Vector2.new(screenPos.X, screenPos.Y), onScreen
         end
         
         function utility:GetMouseLocation()
-            return uis:GetMouseLocation()
+            return c:GetMouseLocation()
         end
         
         function utility:GetMouseDistance(screenPos)
@@ -107,7 +115,7 @@ do -- Targeting Framework
         end
         
         function utility:getHeld()
-            local character = LocalPlayer.Character
+            local character = g.Character
             if not character then return "None" end
             local tool = character:FindFirstChildOfClass("Tool")
             return tool or "None"
@@ -138,8 +146,8 @@ do -- Targeting Framework
         
         function TargetingFramework:GetClosestToMouse()
             local closestPlayer, closestDistance = nil, nil
-            for _, player in ipairs(ps:GetPlayers()) do
-                if player ~= LocalPlayer and self.utility:ValidateClient(player) then
+            for _, player in ipairs(a:GetPlayers()) do
+                if player ~= g and self.utility:ValidateClient(player) then
                     local character = player.Character
                     local targetPart = self.utility:GetPreferredPart(character)
                     if targetPart then
@@ -246,7 +254,7 @@ do -- Targeting Framework
                 TargetingFramework:ClearTargetInfo()
                 TargetingFramework:ClearCurrentTarget()
             else
-                local closestTarget, distance = TargetingFramework:GetClosestToMouse()
+                local closestTarget, _distance = TargetingFramework:GetClosestToMouse()
                 if closestTarget then
                     targeting_state.current = closestTarget
                     TargetingFramework:SetTargetInfo(closestTarget)
@@ -260,7 +268,7 @@ do -- Targeting Framework
     
     do -- Health Detection System
         if not TargetingFramework._dd.conn then
-            TargetingFramework._dd.conn = run.Heartbeat:Connect(function()
+            TargetingFramework._dd.conn = b.Heartbeat:Connect(function()
                 local dd = TargetingFramework._dd
                 local currentTarget = dd.override_player or (targeting_state and targeting_state.current or nil)
                 
@@ -298,7 +306,7 @@ do -- Targeting Framework
                     end
                     
                     if dd.hum then
-                        run.Heartbeat:Wait()
+                        b.Heartbeat:Wait()
                         dd.hum_conn = dd.hum.HealthChanged:Connect(function(newHealth)
                             local maxHealth = dd.hum and dd.hum.MaxHealth or 0
                             if dd.last_health == nil or dd.last_max == nil or maxHealth ~= dd.last_max then
@@ -330,6 +338,198 @@ do -- Targeting Framework
     _G.TargetingFramework = TargetingFramework
 end
 
+do -- Desync Framework
+    local desync_vars = {
+        Players = a,
+        RunService = b,
+        StarterGui = game:GetService("StarterGui"),
+        newcf = C,
+        v3 = B,
+        typeof = typeof,
+        task = task,
+        math = math,
+        cam = cam,
+        uis = c
+    }
+
+    local config = {
+        Desync = {
+            Enabled = false,
+            LogInterval = 2
+        }
+    }
+
+    local state = {
+        enabled = false,
+        targetCFrame = nil,
+        realCFrame = nil,
+        hookInstalled = false,
+        logStarted = false,
+        followMode = false,
+        viz_enabled = false,
+        viz_part = nil,
+        viz_line = nil,
+        viz_conn = nil,
+        heartbeatConn = nil
+    }
+
+    local desync_utility = {}
+
+    function desync_utility:ValidateClient(player)
+        if not player then
+            return false
+        end
+        local character = player.Character
+        if not character then
+            return false
+        end
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then
+            return false
+        end
+        local rootPart = humanoid.RootPart
+        return rootPart ~= nil
+    end
+
+    function desync_utility:getPlayerParts(player)
+        local character = player and player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local rootPart = humanoid and humanoid.RootPart
+        return character, humanoid, rootPart
+    end
+
+    local function parseCFrame(arg1, arg2, arg3)
+        local argType = desync_vars.typeof(arg1)
+        if argType == "CFrame" then
+            return arg1
+        end
+        if argType == "Vector3" then
+            return desync_vars.newcf(arg1)
+        end
+        if argType == "table" and arg1[1] and arg1[2] and arg1[3] then
+            return desync_vars.newcf(arg1[1], arg1[2], arg1[3])
+        end
+        if argType == "number" and type(arg2) == "number" and type(arg3) == "number" then
+            return desync_vars.newcf(arg1, arg2, arg3)
+        end
+        return nil
+    end
+
+    local function installHook()
+        if state.hookInstalled then
+            return
+        end
+        if not hookmetamethod or not newcclosure or not checkcaller then
+            state.hookInstalled = true
+            return
+        end
+        local oldIndex
+        oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+            if not checkcaller() then
+                if key == "CFrame" and state.enabled then
+                    local _, _, rootPart = desync_utility:getPlayerParts(g)
+                    if rootPart and self == rootPart and state.realCFrame then
+                        return state.realCFrame
+                    end
+                end
+            end
+            return oldIndex(self, key)
+        end))
+        state.hookInstalled = true
+    end
+
+    local function startDesyncLoop()
+        if state.heartbeatConn then
+            return
+        end
+        state.heartbeatConn = desync_vars.RunService.Heartbeat:Connect(function()
+            if not config.Desync.Enabled or not state.enabled then
+                return
+            end
+            if not desync_utility:ValidateClient(g) then
+                return
+            end
+            local _, _, rootPart = desync_utility:getPlayerParts(g)
+            if not rootPart then
+                return
+            end
+            state.realCFrame = rootPart.CFrame
+            local targetCF
+            if state.followMode then
+                targetCF = rootPart.CFrame
+            else
+                targetCF = state.targetCFrame or state.realCFrame
+            end
+            rootPart.CFrame = targetCF
+            desync_vars.RunService.RenderStepped:Wait()
+            rootPart.CFrame = state.realCFrame
+        end)
+    end
+
+    local DesyncLibrary = {}
+
+    function DesyncLibrary.movedesyncto(arg1, arg2, arg3)
+        local targetCF = parseCFrame(arg1, arg2, arg3)
+        if not targetCF then
+            error("movedesyncto: invalid coordinates")
+        end
+        state.targetCFrame = targetCF
+        state.followMode = false
+        config.Desync.Enabled = true
+        state.enabled = true
+        installHook()
+        startDesyncLoop()
+        return targetCF
+    end
+
+    function DesyncLibrary.checksyncposition()
+        local position
+        if state.targetCFrame then
+            position = state.targetCFrame.Position
+        else
+            local _, _, rootPart = desync_utility:getPlayerParts(g)
+            position = rootPart and rootPart.Position or nil
+        end
+        return position
+    end
+
+    function DesyncLibrary.SynchronizeSyncWithPlayer()
+        if not desync_utility:ValidateClient(g) then
+            error("SynchronizeSyncWithPlayer: player not ready")
+        end
+        state.targetCFrame = nil
+        state.followMode = true
+        config.Desync.Enabled = true
+        state.enabled = true
+        installHook()
+        startDesyncLoop()
+        local _, _, rootPart = desync_utility:getPlayerParts(g)
+        return rootPart and rootPart.CFrame or nil
+    end
+
+    function DesyncLibrary.StopDesync()
+        config.Desync.Enabled = false
+        state.enabled = false
+        state.targetCFrame = nil
+        state.followMode = false
+        
+        if state.heartbeatConn then
+            pcall(function()
+                state.heartbeatConn:Disconnect()
+            end)
+            state.heartbeatConn = nil
+        end
+    end
+
+    function DesyncLibrary.IsEnabled()
+        return state.enabled
+    end
+
+    pcall(function()
+        getgenv().DesyncLibrary = DesyncLibrary
+    end)
+    _G.DesyncLibrary = DesyncLibrary
+end
 
 local K =
     loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/library"))()
@@ -340,7 +540,6 @@ local L =
         Size = UDim2.new(0, 700, 0, 670),
         GradientTitle = {
             Enabled = false,
-            Enabled = false,
             Start = Color3.fromRGB(255, 255, 255),
             Middle = Color3.fromRGB(255, 255, 255),
             End = Color3.fromRGB(255, 255, 255),
@@ -349,12 +548,14 @@ local L =
     }
 )
 local M = L:Page({Name = "Ragebot", Columns = 2})
-local N = L:Page({Name = "Visuals", Columns = 2})
-local O = L:Page({Name = "Misc", Columns = 2})
-local P = L:Page({Name = "AntiAim", Columns = 2})
+-- Неиспользуемые вкладки (закомментированы для оптимизации)
+-- local N = L:Page({Name = "Visuals", Columns = 2})
+-- local O = L:Page({Name = "Misc", Columns = 2})
+-- local P = L:Page({Name = "AntiAim", Columns = 2})
 
 do -- Ragebot Tab
-    local aP = M:Section({Name = "Targeting", Side = 1})
+    do -- Targeting Section
+        local aP = M:Section({Name = "Targeting", Side = 1})
     local aQ = aP:Toggle({
         Name = "Targeting",
         Default = false,
@@ -372,19 +573,22 @@ do -- Ragebot Tab
         end
     })
     
-    local aS = aQ:Keybind({
-        Name = "Target Selection",
-        Mode = "Toggle",
-        Default = Enum.KeyCode.T,
-        Flag = "TargetSelectionKey",
-        Callback = function(aT)
-            if K.Flags["TargetingEnabled"] and _G.TargetingFramework and _G.TargetingFramework.selector then
-                _G.TargetingFramework.selector:selectTarget()
+        local aS = aQ:Keybind({
+            Name = "Target Selection",
+            Mode = "Toggle",
+            Default = Enum.KeyCode.T,
+            Flag = "TargetSelectionKey",
+            Callback = function(aT)
+                if K.Flags["TargetingEnabled"] and _G.TargetingFramework and _G.TargetingFramework.selector then
+                    _G.TargetingFramework.selector:selectTarget()
+                end
             end
-        end
-    })
+        })
+    end
     
-    local aY = M:Section({Name = "Aimbot", Side = 1})
+    
+    do -- Aimbot Section
+        local aY = M:Section({Name = "Aimbot", Side = 1})
     local aZ = aY:Toggle({
         Name = "Enabled",
         Default = false,
@@ -423,17 +627,20 @@ do -- Ragebot Tab
         end
     })
     
-    local bh = aY:Dropdown({
-        Name = "Resolver Type",
-        Items = {"Velocity", "MoveDirection", "CalculateCFrame"},
-        Default = "Velocity",
-        Flag = "ResolverType",
-        Callback = function(bi)
-            -- Callback обрабатывается через resolver logic
-        end
-    })
+        local bh = aY:Dropdown({
+            Name = "Resolver Type",
+            Items = {"Velocity", "MoveDirection", "CalculateCFrame"},
+            Default = "Velocity",
+            Flag = "ResolverType",
+            Callback = function(bi)
+                -- Callback обрабатывается через resolver logic
+            end
+        })
+    end
     
-    local aT = M:Section({Name = "Notify", Side = 2})
+    
+    do -- Notify Section
+        local aT = M:Section({Name = "Notify", Side = 2})
     local aU = aT:Toggle({
         Name = "OnSelected",
         Default = false,
@@ -443,14 +650,39 @@ do -- Ragebot Tab
         end
     })
     
-    local aW = aT:Toggle({
-        Name = "OnDamage", 
-        Default = false,
-        Flag = "NotifyOnDamage",
-        Callback = function(aX)
-            -- Callback будет обработан через targeting framework
-        end
-    })
+        local aW = aT:Toggle({
+            Name = "OnDamage", 
+            Default = false,
+            Flag = "NotifyOnDamage",
+            Callback = function(aX)
+                -- Callback будет обработан через targeting framework
+            end
+        })
+    end
+    
+    do -- Desync Section
+        local desyncSection = M:Section({Name = "Desync", Side = 2})
+        local _autoArmorToggle = desyncSection:Toggle({
+            Name = "AutoArmor",
+            Default = false,
+            Flag = "AutoArmorEnabled",
+            Callback = function(enabled)
+                if _G.AutoArmorFramework then
+                    if enabled then
+                        _G.AutoArmorFramework.start()
+                    else
+                        _G.AutoArmorFramework.stop()
+                        -- Синхронизируемся при выключении
+                        if getgenv().DesyncLibrary then
+                            pcall(function()
+                                getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                            end)
+                        end
+                    end
+                end
+            end
+        })
+    end
     
     do -- Notification Integration
         if _G.TargetingFramework then
@@ -485,12 +717,12 @@ do -- Ragebot Tab
             
             local targetPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Head")
             if not targetPart then 
-                return nil 
+                return nil
             end
             
             if not LastPosition or not LastUpdateTime then
                 LastPosition = targetPart.Position
-                LastUpdateTime = tick()
+                LastUpdateTime = os.clock()
                 return LastPosition
             end
             
@@ -510,8 +742,17 @@ do -- Ragebot Tab
                 if (targetPart.Position - LastPosition).Magnitude < 0.001 then
                     return targetPart.Position
                 else
-                    LastUpdateTime, LastPosition = tick(), targetPart.Position
-                    return LastPosition + (LastPosition - LastPosition).Unit * ((((LastPosition - LastPosition).Magnitude) / (tick() - LastUpdateTime)) * (0.1 * (xzPrediction * 10))) + B(0, ((LastPosition.Y - LastPosition.Y) / (tick() - LastUpdateTime) * (0.1 * xzPrediction)), 0)
+                    local currentTime = os.clock()
+                    local deltaTime = currentTime - LastUpdateTime
+                    local deltaPosition = targetPart.Position - LastPosition
+                    LastUpdateTime, LastPosition = currentTime, targetPart.Position
+                    
+                    if deltaTime > 0 and deltaPosition.Magnitude > 0.001 then
+                        local velocity = deltaPosition / deltaTime
+                        return targetPart.Position + velocity * (0.1 * xzPrediction)
+                    else
+                        return targetPart.Position
+                    end
                 end
             end
             
@@ -610,8 +851,8 @@ do -- Ragebot Tab
                 return
             end
             
+            if not tool.Handle then return end
             local origin = tool.Handle.Position
-            if not origin then return end
             
             local targetPlayer = _G.targeting_state.current
             local targetPart = targetPlayer.Character and (targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Head"))
@@ -643,7 +884,7 @@ do -- Ragebot Tab
             currentBeam.att1.WorldPosition = predictedPos
         end
         
-        beamConnection = run.Heartbeat:Connect(UpdateBeam)
+        beamConnection = b.Heartbeat:Connect(UpdateBeam)
         
         _G.BeamVisualization = {
             connection = beamConnection,
@@ -661,8 +902,128 @@ do -- Ragebot Tab
             end
         }
     end
-end
-do
+    
+    do -- AutoArmor Framework
+        local AutoArmorFramework = {}
+        local armorConnection = nil
+        local ARMOR_THRESHOLD = 199
+        local isBuying = false
+        
+        local function GetArmorItem()
+            local shopItems = workspace.Ignored and workspace.Ignored.Shop and workspace.Ignored.Shop:GetChildren()
+            if shopItems and #shopItems >= 28 then
+                return shopItems[28]
+            end
+            return nil
+        end
+        
+        local function BuyArmor()
+            if not K.Flags["AutoArmorEnabled"] then return end
+            if isBuying then return end -- Предотвращаем спам
+            
+            local player = g
+            if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+                return
+            end
+            
+            if not player.Character:FindFirstChild("BodyEffects") or 
+               not player.Character.BodyEffects:FindFirstChild("Armor") then
+                return
+            end
+            
+            local armorItem = GetArmorItem()
+            if not armorItem then return end
+            
+            local currentArmor = player.Character.BodyEffects.Armor.Value
+            if currentArmor > ARMOR_THRESHOLD then return end
+            
+            isBuying = true -- Блокируем повторные вызовы
+            
+            -- Уведомление о начале цикла покупки
+            K:Notification("Buying armor...", 2, z(255, 255, 0))
+            
+            -- Используем новый desync фреймворк для покупки
+            if getgenv().DesyncLibrary then
+                local success = pcall(function()
+                    -- Перемещаемся к объекту брони через новый desync API
+                    getgenv().DesyncLibrary.movedesyncto(armorItem.Head.CFrame)
+                    wait(0.5)
+                    
+                    -- Покупаем броню
+                    fireclickdetector(armorItem.ClickDetector)
+                    wait(0.5)
+                    
+                    -- Синхронизируемся с локальным игроком
+                    getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                end)
+                
+                if not success then
+                    -- В случае ошибки синхронизируемся с локальным игроком
+                    pcall(function()
+                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    end)
+                end
+                
+                -- Уведомление о завершении цикла
+                K:Notification("Armor buyed, player synced", 2, z(0, 255, 0))
+            end
+            
+            isBuying = false -- Разблокируем после завершения
+        end
+        
+        local function StartAutoArmor()
+            if armorConnection then
+                armorConnection:Disconnect()
+                armorConnection = nil
+            end
+            
+            if K.Flags["AutoArmorEnabled"] then
+                armorConnection = b.Heartbeat:Connect(function()
+                    wait(1)
+                    BuyArmor()
+                end)
+            end
+        end
+        
+        AutoArmorFramework.start = StartAutoArmor
+        AutoArmorFramework.stop = function()
+            if armorConnection then
+                armorConnection:Disconnect()
+                armorConnection = nil
+            end
+        end
+        
+        -- Обработка смерти игрока
+        local function OnCharacterRemoving()
+            if getgenv().DesyncLibrary then
+                pcall(function()
+                    getgenv().DesyncLibrary.StopDesync()
+                end)
+            end
+        end
+        
+        local function OnCharacterAdded(character)
+            if character then
+                local humanoid = character:WaitForChild("Humanoid", 5)
+                if humanoid then
+                    humanoid.Died:Connect(OnCharacterRemoving)
+                end
+            end
+        end
+        
+        -- Подключаем обработчики смерти
+        g.CharacterRemoving:Connect(OnCharacterRemoving)
+        g.CharacterAdded:Connect(OnCharacterAdded)
+        
+        -- Если персонаж уже существует
+        if g.Character then
+            OnCharacterAdded(g.Character)
+        end
+        
+        _G.AutoArmorFramework = AutoArmorFramework
+    end
+end -- End Ragebot Tab
+do -- Watermark & Keybinds
     local Q = K:Watermark("Fentanyl | " .. g.Name .. " | " .. os.date("%y.%m.%d") .. " | Premium")
     local R = K:KeybindList()
     if Q then
@@ -674,12 +1035,12 @@ do
     _G.Watermark = Q
     _G.KeybindList = R
 end
-do
+do -- Settings Tab
     local S = L:Page({Name = "Settings", Columns = 2})
     local T = S:Section({Name = "Config", Side = 1})
     local U = ""
     local V = ""
-    local W = {}
+    local _W = {}
     do
         if not isfolder("fentanyl") then
             makefolder("fentanyl")
@@ -689,15 +1050,15 @@ do
         end
     end
     local function X()
-        local W = {}
+        local configList = {}
         if isfolder("fentanyl/Configs") then
             for J, Y in ipairs(listfiles("fentanyl/Configs")) do
                 local Z = Y:gsub("\\", "/")
                 Z = Z:gsub("fentanyl/Configs/", "")
-                p(W, Z)
+                p(configList, Z)
             end
         end
-        return W
+        return configList
     end
     local _ =
         T:Listbox(
