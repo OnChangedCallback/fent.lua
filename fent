@@ -17,7 +17,7 @@ local r, s = table.sort, table.concat
 local t, u = string.format, string.match
 local v, w = string.lower, string.upper
 local x, y = string.sub, string.gsub
-local pairs, ipairs = pairs, ipairs
+local ipairs = ipairs
 local type, tostring = type, tostring
 local pcall, xpcall = pcall, xpcall
 local loadstring = loadstring
@@ -327,6 +327,7 @@ do -- Targeting Framework
                             
                             if newHealth < dd.last_health then
                                 local damage = dd.last_health - newHealth
+                                print("[DamageDetection] Damage detected:", damage, "to", currentTarget.Name)
                                 TargetingFramework:_emit_hit({
                                     player = currentTarget,
                                     damage = damage,
@@ -358,6 +359,11 @@ do -- Targeting Framework
         
         -- Запускаем только если нужно
         TargetingFramework.StartHealthDetection = StartHealthDetection
+        
+        -- Добавляем метод для проверки статуса
+        function TargetingFramework:IsHealthDetectionActive()
+            return self._dd.conn ~= nil
+        end
     end
     
     _G.TargetingFramework = TargetingFramework
@@ -497,6 +503,7 @@ do -- Desync Framework
     end
 
     local DesyncLibrary = {}
+    
 
     function DesyncLibrary.movedesyncto(arg1, arg2, arg3)
         local targetCF = parseCFrame(arg1, arg2, arg3)
@@ -524,8 +531,9 @@ do -- Desync Framework
     end
 
     function DesyncLibrary.SynchronizeSyncWithPlayer()
+        -- Безопасная проверка без ошибки
         if not desync_utility:ValidateClient(g) then
-            error("SynchronizeSyncWithPlayer: player not ready")
+            return nil -- Просто возвращаем nil вместо ошибки
         end
         state.targetCFrame = nil
         state.followMode = true
@@ -554,6 +562,7 @@ do -- Desync Framework
     function DesyncLibrary.IsEnabled()
         return state.enabled
     end
+    
 
     pcall(function()
         getgenv().DesyncLibrary = DesyncLibrary
@@ -596,12 +605,14 @@ do -- Ragebot Tab
                     -- Включаем health detection при включении таргетинга
                     if _G.TargetingFramework.StartHealthDetection then
                         _G.TargetingFramework.StartHealthDetection()
+                        print("[Targeting] Health detection started")
                     end
                 else
                     -- Выключаем health detection и очищаем таргет
                     _G.TargetingFramework:StopHealthDetection()
                     _G.TargetingFramework:ClearTargetInfo()
                     _G.TargetingFramework:ClearCurrentTarget()
+                    print("[Targeting] Health detection stopped")
                     if _G.targeting_state then
                         _G.targeting_state.current = nil
                     end
@@ -745,6 +756,21 @@ do -- Ragebot Tab
                 end
             end
         })
+        
+        desyncSection:Toggle({
+            Name = "Hide",
+            Default = false,
+            Flag = "HideEnabled",
+            Callback = function(enabled)
+                if _G.HideFramework then
+                    if enabled then
+                        _G.HideFramework.start()
+                    else
+                        _G.HideFramework.stop()
+                    end
+                end
+            end
+        })
     end
     
     do -- Notification Integration
@@ -760,9 +786,13 @@ do -- Ragebot Tab
             end)
             
             _G.TargetingFramework:OnHit(function(hitInfo)
+                print("[DamageNotification] Hit event received:", hitInfo and hitInfo.damage or "nil")
                 if K.Flags["NotifyOnDamage"] and hitInfo then
                     local damageText = t("%.1f damage to %s", hitInfo.damage, hitInfo.player.Name)
+                    print("[DamageNotification] Showing notification:", damageText)
                     K:Notification(damageText, 2, z(255, 100, 100))
+                else
+                    print("[DamageNotification] Flag disabled or no hitInfo")
                 end
             end)
         end
@@ -977,10 +1007,105 @@ do -- Ragebot Tab
         }
     end
     
+    do -- Hide Framework
+        local HideFramework = {}
+        local hideConnection = nil
+        local isHiding = false
+        local isPaused = false
+        local lastHideTime = 0
+        local hideInterval = 0.1
+        
+        local function getRandomVoidPosition()
+            local x = h() * 5000 - 1000 -- random от -1000 до 1000
+            local y = -i -- -math.huge
+            local z = h() * 5000 - 1000 -- random от -1000 до 1000
+            return B(x, y, z)
+        end
+        
+        function HideFramework.start()
+            if isHiding then return end
+            
+            isHiding = true
+            K:Notification("Hide enabled", 2, z(128, 0, 128))
+            
+            hideConnection = b.Heartbeat:Connect(function()
+                if not isHiding then
+                    if hideConnection then
+                        hideConnection:Disconnect()
+                        hideConnection = nil
+                    end
+                    return
+                end
+                
+                -- Проверяем паузу
+                if isPaused then
+                    -- Просто выходим на паузе, не синхронизируемся
+                    return
+                end
+                
+                -- Проверяем флаг
+                if not K.Flags["HideEnabled"] then
+                    if hideConnection then
+                        hideConnection:Disconnect()
+                        hideConnection = nil
+                    end
+                    isHiding = false
+                    return
+                end
+                
+                -- Используем десинк для прятания в войде
+                if getgenv().DesyncLibrary then
+                    local currentTime = os.clock()
+                    if currentTime - lastHideTime >= hideInterval then
+                        lastHideTime = currentTime
+                        local voidPos = getRandomVoidPosition()
+                        getgenv().DesyncLibrary.movedesyncto(voidPos.X, voidPos.Y, voidPos.Z)
+                    end
+                end
+            end)
+        end
+        
+        function HideFramework.stop()
+            isHiding = false
+            isPaused = false
+            
+            if hideConnection then
+                hideConnection:Disconnect()
+                hideConnection = nil
+            end
+            
+            -- Синхронизируемся при остановке
+            if getgenv().DesyncLibrary then
+                getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+            end
+            
+            K:Notification("Hide disabled", 2, z(255, 0, 0))
+        end
+        
+        function HideFramework.pause()
+            isPaused = true
+        end
+        
+        function HideFramework.resume()
+            isPaused = false
+        end
+        
+        function HideFramework.isEnabled()
+            return isHiding
+        end
+        
+        function HideFramework.isPaused()
+            return isPaused
+        end
+        
+        _G.HideFramework = HideFramework
+    end
+    
     do -- Auto Stomp Framework
         local AutoStompFramework = {}
         local stompConnection = nil
         local isStomping = false
+        local isPaused = false
         local lastStompTime = 0
         local stompInterval = 0.1
         
@@ -1010,6 +1135,7 @@ do -- Ragebot Tab
             isStomping = true
             K:Notification("Auto Stomp enabled", 2, z(0, 255, 0))
             
+            -- Простой подход с проверкой паузы
             stompConnection = b.Heartbeat:Connect(function()
                 if not isStomping then
                     if stompConnection then
@@ -1019,34 +1145,65 @@ do -- Ragebot Tab
                     return
                 end
                 
+                -- Проверяем паузу
+                if isPaused then
+                    -- Просто выходим на паузе, не синхронизируемся
+                    return
+                end
+                
                 local currentTarget = _G.TargetingFramework:GetCurrentTarget()
+                
+                -- Проверяем приоритет Hide ТОЛЬКО если нет K.O цели
+                -- Если есть K.O цель, AutoStomp имеет приоритет над Hide
+                if not currentTarget or not currentTarget.Character or not isPlayerKO(currentTarget) then
+                    -- Нет K.O цели - Hide может блокировать AutoStomp
+                    if _G.HideFramework and _G.HideFramework.isEnabled() and not _G.HideFramework.isPaused() then
+                        return
+                    end
+                end
                 if not currentTarget then 
-                    -- Синхронизируемся когда цель пропадает
-                    if getgenv().DesyncLibrary then
-                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    -- Синхронизируемся только если НЕ на паузе (чтобы не мешать AutoArmor)
+                    if not isPaused and getgenv().DesyncLibrary then
+                        pcall(function()
+                            getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        end)
                     end
                     return 
                 end
                 
                 if not currentTarget.Character then 
-                    -- Синхронизируемся когда персонаж цели пропадает
-                    if getgenv().DesyncLibrary then
-                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    -- Синхронизируемся только если НЕ на паузе (чтобы не мешать AutoArmor)
+                    if not isPaused and getgenv().DesyncLibrary then
+                        pcall(function()
+                            getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        end)
                     end
                     return 
                 end
                 
                 if not isPlayerKO(currentTarget) then 
-                    -- Синхронизируемся когда цель выходит из K.O
-                    if getgenv().DesyncLibrary then
-                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    -- Синхронизируемся только если НЕ на паузе (чтобы не мешать AutoArmor)
+                    if not isPaused and getgenv().DesyncLibrary then
+                        pcall(function()
+                            getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        end)
+                    end
+                    -- Возобновляем Hide если он был приостановлен
+                    if _G.HideFramework and _G.HideFramework.isEnabled() and _G.HideFramework.isPaused() then
+                        _G.HideFramework.resume()
                     end
                     return 
+                end
+                
+                -- Если дошли до сюда - есть K.O цель, приостанавливаем Hide если он активен
+                if _G.HideFramework and _G.HideFramework.isEnabled() and not _G.HideFramework.isPaused() then
+                    _G.HideFramework.pause()
                 end
                 
                 local upperTorso = currentTarget.Character:FindFirstChild("UpperTorso")
                 if not upperTorso then return end
                 
+                -- Используем десинк для стомпа
                 if getgenv().DesyncLibrary then
                     local pos = upperTorso.Position
                     getgenv().DesyncLibrary.movedesyncto(pos.X, pos.Y + 1, pos.Z)
@@ -1062,17 +1219,27 @@ do -- Ragebot Tab
         
         function AutoStompFramework.stop()
             isStomping = false
+            isPaused = false
             
             if stompConnection then
                 stompConnection:Disconnect()
                 stompConnection = nil
             end
             
+            -- Синхронизируемся при остановке
             if getgenv().DesyncLibrary then
                 getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
             end
             
             K:Notification("Auto Stomp disabled", 2, z(255, 0, 0))
+        end
+        
+        function AutoStompFramework.pause()
+            isPaused = true
+        end
+        
+        function AutoStompFramework.resume()
+            isPaused = false
         end
         
         function AutoStompFramework.isEnabled()
@@ -1098,46 +1265,80 @@ do -- Ragebot Tab
         end
         
         local function BuyArmor()
-            if not K.Flags["AutoArmorEnabled"] then return end
-            if isBuying then return end -- Предотвращаем спам
+            if not K.Flags["AutoArmorEnabled"] then 
+                return 
+            end
+            if isBuying then 
+                print("[AutoArmor] Already buying, skipping")
+                return 
+            end
             
             local player = g
             if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+                print("[AutoArmor] No character or HumanoidRootPart")
                 return
             end
             
             if not player.Character:FindFirstChild("BodyEffects") or 
                not player.Character.BodyEffects:FindFirstChild("Armor") then 
+                print("[AutoArmor] No BodyEffects or Armor")
                 return
             end
             
             local armorItem = GetArmorItem()
-            if not armorItem then return end
+            if not armorItem then 
+                print("[AutoArmor] Armor item not found in shop")
+                return 
+            end
             
             local currentArmor = player.Character.BodyEffects.Armor.Value
-            if currentArmor > ARMOR_THRESHOLD then return end
+            print("[AutoArmor] Current armor:", currentArmor, "Threshold:", ARMOR_THRESHOLD)
             
-            isBuying = true -- Блокируем повторные вызовы
+            if currentArmor > ARMOR_THRESHOLD then 
+                return 
+            end
             
-            -- Уведомление о начале цикла покупки
-            K:Notification("Buying armor...", 2, z(255, 255, 0))
+            print("[AutoArmor] Starting armor purchase, current armor:", currentArmor)
+            isBuying = true
+            
+            -- ОСТАНАВЛИВАЕМ другие фреймворки если они включены (приоритет AutoArmor)
+            local wasStompEnabled = false
+            local wasHideEnabled = false
+            
+            if _G.AutoStompFramework and _G.AutoStompFramework.isEnabled() then
+                wasStompEnabled = true
+                print("[AutoArmor] Pausing AutoStomp")
+                _G.AutoStompFramework.pause()
+            end
+            
+            if _G.HideFramework and _G.HideFramework.isEnabled() then
+                wasHideEnabled = true
+                print("[AutoArmor] Pausing Hide")
+                _G.HideFramework.pause()
+            end
             
             -- Используем новый desync фреймворк для покупки
             if getgenv().DesyncLibrary then
-                local success = pcall(function()
+                K:Notification("[DEBUG] Buying armor, stomp paused: " .. tostring(wasStompEnabled), 3, z(255, 255, 0))
+                print("[AutoArmor] Moving to armor shop with desync")
+                
+                local success, err = pcall(function()
                     -- Перемещаемся к объекту брони через новый desync API
                     getgenv().DesyncLibrary.movedesyncto(armorItem.Head.CFrame)
-                    wait(0.5)
+                    wait(0.3)
                     
+                    print("[AutoArmor] Clicking armor detector")
                     -- Покупаем броню
                     fireclickdetector(armorItem.ClickDetector)
                     wait(0.5)
                     
+                    print("[AutoArmor] Syncing with player")
                     -- Синхронизируемся с локальным игроком
                     getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
                 end)
                 
                 if not success then
+                    print("[AutoArmor] Error during purchase:", err)
                     -- В случае ошибки синхронизируемся с локальным игроком
                     pcall(function()
                         getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
@@ -1145,14 +1346,33 @@ do -- Ragebot Tab
                 end
                 
                 -- Проверяем броню после покупки
-                wait(0.2) -- Небольшая задержка для обновления значения
+                wait(0.2)
                 local newArmor = player.Character.BodyEffects.Armor.Value
+                print("[AutoArmor] Armor after purchase:", newArmor)
+                
                 if newArmor >= 200 then
-                    K:Notification("Armor buyed, player synced", 2, z(0, 255, 0))
+                    K:Notification("[DEBUG] Armor bought: " .. newArmor, 3, z(0, 255, 0))
+                else
+                    K:Notification("[DEBUG] Armor purchase failed: " .. newArmor, 3, z(255, 0, 0))
                 end
+            else
+                print("[AutoArmor] DesyncLibrary not found!")
             end
             
-            isBuying = false -- Разблокируем после завершения
+            -- ВОЗОБНОВЛЯЕМ другие фреймворки если они были включены
+            if wasHideEnabled and _G.HideFramework then
+                print("[AutoArmor] Resuming Hide")
+                _G.HideFramework.resume()
+            end
+            
+            if wasStompEnabled and _G.AutoStompFramework then
+                print("[AutoArmor] Resuming AutoStomp")
+                _G.AutoStompFramework.resume()
+                K:Notification("[DEBUG] Frameworks resumed", 2, z(0, 255, 255))
+            end
+            
+            isBuying = false
+            print("[AutoArmor] Purchase cycle completed")
         end
         
         local function StartAutoArmor()
@@ -1162,7 +1382,7 @@ do -- Ragebot Tab
             end
             
             if K.Flags["AutoArmorEnabled"] then
-                -- Используем более эффективный подход с таймером
+                print("[AutoArmor] Starting AutoArmor framework")
                 local lastCheck = 0
                 armorConnection = b.Heartbeat:Connect(function()
                     -- Проверяем флаг каждый кадр
