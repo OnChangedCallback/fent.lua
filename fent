@@ -9,7 +9,7 @@ local e = game:GetService("HttpService")
 local f = game:GetService("Lighting")
 local g = a.LocalPlayer
 local h, i = math.random, math.huge
-local _j, k = math.floor, math.ceil
+local j, k = math.floor, math.ceil
 local l, m = math.abs, math.sqrt
 local n, o = math.sin, math.cos
 local p, q = table.insert, table.remove
@@ -27,8 +27,6 @@ local z = Color3.fromRGB
 local A = UDim2.new
 local B = Vector3.new
 local C = CFrame.new
-local UDim2 = UDim2
-local Color3 = Color3
 local isfolder = isfolder
 local isfile = isfile
 local listfiles = listfiles
@@ -44,12 +42,12 @@ local Instance = Instance
 local ColorSequence = ColorSequence
 local NumberSequence = NumberSequence
 local Enum = Enum
-local hookmetamethod = hookmetamethod or function() end
-local checkcaller = checkcaller or function() return true end
-local newcclosure = newcclosure or function(f) return f end
+local hookmetamethod = hookmetamethod
+local checkcaller = checkcaller
+local newcclosure = newcclosure
 local getgenv = getgenv
 local task = task
-local _wait = wait
+local wait = wait
 local fireclickdetector = fireclickdetector
 local E = {}
 local F = {}
@@ -269,11 +267,17 @@ do -- Targeting Framework
     end
     
     do -- Health Detection System
-        TargetingFramework.StartHealthDetection = function()
+        local function StartHealthDetection()
             if TargetingFramework._dd.conn then
                 TargetingFramework._dd.conn:Disconnect()
+                TargetingFramework._dd.conn = nil
             end
+            
             TargetingFramework._dd.conn = b.Heartbeat:Connect(function()
+                -- Проверяем включен ли таргетинг
+                if not K or not K.Flags or not K.Flags["TargetingEnabled"] then
+                    return
+                end
                 
                 local dd = TargetingFramework._dd
                 local currentTarget = dd.override_player or (targeting_state and targeting_state.current or nil)
@@ -312,7 +316,7 @@ do -- Targeting Framework
                     end
                     
                     if dd.hum then
-                        task.wait()
+                        b.Heartbeat:Wait()
                         dd.hum_conn = dd.hum.HealthChanged:Connect(function(newHealth)
                             local maxHealth = dd.hum and dd.hum.MaxHealth or 0
                             if dd.last_health == nil or dd.last_max == nil or maxHealth ~= dd.last_max then
@@ -340,16 +344,20 @@ do -- Targeting Framework
             end)
         end
         
-        TargetingFramework.StopHealthDetection = function()
-            if TargetingFramework._dd.conn then
-                TargetingFramework._dd.conn:Disconnect()
-                TargetingFramework._dd.conn = nil
+        -- Функция остановки
+        function TargetingFramework:StopHealthDetection()
+            if self._dd.conn then
+                self._dd.conn:Disconnect()
+                self._dd.conn = nil
             end
-            if TargetingFramework._dd.hum_conn then
-                TargetingFramework._dd.hum_conn:Disconnect()
-                TargetingFramework._dd.hum_conn = nil
+            if self._dd.hum_conn then
+                self._dd.hum_conn:Disconnect()
+                self._dd.hum_conn = nil
             end
         end
+        
+        -- Запускаем только если нужно
+        TargetingFramework.StartHealthDetection = StartHealthDetection
     end
     
     _G.TargetingFramework = TargetingFramework
@@ -460,7 +468,12 @@ do -- Desync Framework
             return
         end
         state.heartbeatConn = desync_vars.RunService.Heartbeat:Connect(function()
+            -- Проверяем флаги и отключаем цикл если не нужен
             if not config.Desync.Enabled or not state.enabled then
+                if state.heartbeatConn then
+                    state.heartbeatConn:Disconnect()
+                    state.heartbeatConn = nil
+                end
                 return
             end
             if not desync_utility:ValidateClient(g) then
@@ -478,7 +491,7 @@ do -- Desync Framework
                 targetCF = state.targetCFrame or state.realCFrame
             end
             rootPart.CFrame = targetCF
-            task.wait()
+            desync_vars.RunService.RenderStepped:Wait()
             rootPart.CFrame = state.realCFrame
         end)
     end
@@ -580,9 +593,13 @@ do -- Ragebot Tab
         Callback = function(aR)
             if _G.TargetingFramework then
                 if aR then
-                    _G.TargetingFramework.StartHealthDetection()
+                    -- Включаем health detection при включении таргетинга
+                    if _G.TargetingFramework.StartHealthDetection then
+                        _G.TargetingFramework.StartHealthDetection()
+                    end
                 else
-                    _G.TargetingFramework.StopHealthDetection()
+                    -- Выключаем health detection и очищаем таргет
+                    _G.TargetingFramework:StopHealthDetection()
                     _G.TargetingFramework:ClearTargetInfo()
                     _G.TargetingFramework:ClearCurrentTarget()
                     if _G.targeting_state then
@@ -643,11 +660,16 @@ do -- Ragebot Tab
         Default = false,
         Flag = "ShowAimbot",
         Callback = function(bg)
+            -- Управляем beam visualization
             if _G.BeamVisualization then
                 if bg then
-                    _G.BeamVisualization.start()
+                    if _G.BeamVisualization.StartBeamVisualization then
+                        _G.BeamVisualization.StartBeamVisualization()
+                    end
                 else
-                    _G.BeamVisualization.stop()
+                    if _G.BeamVisualization.StopBeamVisualization then
+                        _G.BeamVisualization.StopBeamVisualization()
+                    end
                 end
             end
         end
@@ -708,6 +730,21 @@ do -- Ragebot Tab
                 end
             end
         })
+        
+        local _autoStompToggle = desyncSection:Toggle({
+            Name = "Auto Stomp",
+            Default = false,
+            Flag = "AutoStompEnabled",
+            Callback = function(enabled)
+                if _G.AutoStompFramework then
+                    if enabled then
+                        _G.AutoStompFramework.start()
+                    else
+                        _G.AutoStompFramework.stop()
+                    end
+                end
+            end
+        })
     end
     
     do -- Notification Integration
@@ -715,18 +752,17 @@ do -- Ragebot Tab
             _G.TargetingFramework:OnTargetUpdate(function(targetInfo)
                 if K.Flags["NotifyOnSelected"] then
                     if targetInfo then
-                        K:Notification("ragebot set to " .. targetInfo.name, 1, z(0, 255, 0))
+                        K:Notification("Target selected: " .. targetInfo.name, 2, z(0, 255, 0))
                     else
-                        K:Notification("ragebot set to nobody", 1, z(255, 255, 0))
+                        K:Notification("Target cleared", 2, z(255, 255, 0))
                     end
                 end
             end)
             
             _G.TargetingFramework:OnHit(function(hitInfo)
                 if K.Flags["NotifyOnDamage"] and hitInfo then
-                    local healthPercent = math.floor((hitInfo.health / hitInfo.maxHealth) * 100)
-                    local damageText = t("Ragebot target %s hit for %.1f (%d%%)", hitInfo.player.Name, hitInfo.damage, healthPercent)
-                    K:Notification(damageText, 1, z(255, 100, 100))
+                    local damageText = t("%.1f damage to %s", hitInfo.damage, hitInfo.player.Name)
+                    K:Notification(damageText, 2, z(255, 100, 100))
                 end
             end)
         end
@@ -911,7 +947,7 @@ do -- Ragebot Tab
             currentBeam.att1.WorldPosition = predictedPos
         end
         
-        -- НЕ создаем постоянное подключение, вместо этого будем создавать его при включении ShowAimbot
+        -- Инициализация beam connection отложена до включения функции
         local function StartBeamVisualization()
             if beamConnection then
                 beamConnection:Disconnect()
@@ -933,12 +969,119 @@ do -- Ragebot Tab
         end
         
         _G.BeamVisualization = {
-            start = StartBeamVisualization,
-            stop = StopBeamVisualization,
-            cleanup = StopBeamVisualization
+            StartBeamVisualization = StartBeamVisualization,
+            StopBeamVisualization = StopBeamVisualization,
+            cleanup = function()
+                StopBeamVisualization()
+            end
         }
     end
     
+    do -- Auto Stomp Framework
+        local AutoStompFramework = {}
+        local stompConnection = nil
+        local isStomping = false
+        local lastStompTime = 0
+        local stompInterval = 0.1
+        
+        local function isPlayerKO(player)
+            if not player or not player.Character then return false end
+            
+            local bodyEffects = player.Character:FindFirstChild("BodyEffects")
+            if not bodyEffects then return false end
+            
+            local ko = bodyEffects:FindFirstChild("K.O")
+            if ko and ko.Value == true then return true end
+            
+            return false
+        end
+        
+        local function performStomp()
+            local args = {"Stomp"}
+            local mainRemoteEvent = game:GetService("ReplicatedStorage"):WaitForChild("MainRemotes"):WaitForChild("MainRemoteEvent")
+            if mainRemoteEvent then
+                mainRemoteEvent:FireServer(unpack(args))
+            end
+        end
+        
+        function AutoStompFramework.start()
+            if isStomping then return end
+            
+            isStomping = true
+            K:Notification("Auto Stomp enabled", 2, z(0, 255, 0))
+            
+            stompConnection = b.Heartbeat:Connect(function()
+                if not isStomping then
+                    if stompConnection then
+                        stompConnection:Disconnect()
+                        stompConnection = nil
+                    end
+                    return
+                end
+                
+                local currentTarget = _G.TargetingFramework:GetCurrentTarget()
+                if not currentTarget then 
+                    -- Синхронизируемся когда цель пропадает
+                    if getgenv().DesyncLibrary then
+                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    end
+                    return 
+                end
+                
+                if not currentTarget.Character then 
+                    -- Синхронизируемся когда персонаж цели пропадает
+                    if getgenv().DesyncLibrary then
+                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    end
+                    return 
+                end
+                
+                if not isPlayerKO(currentTarget) then 
+                    -- Синхронизируемся когда цель выходит из K.O
+                    if getgenv().DesyncLibrary then
+                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    end
+                    return 
+                end
+                
+                local upperTorso = currentTarget.Character:FindFirstChild("UpperTorso")
+                if not upperTorso then return end
+                
+                if getgenv().DesyncLibrary then
+                    local pos = upperTorso.Position
+                    getgenv().DesyncLibrary.movedesyncto(pos.X, pos.Y + 1, pos.Z)
+                    
+                    local currentTime = os.clock()
+                    if currentTime - lastStompTime >= stompInterval then
+                        lastStompTime = currentTime
+                        performStomp()
+                    end
+                end
+            end)
+        end
+        
+        function AutoStompFramework.stop()
+            isStomping = false
+            
+            if stompConnection then
+                stompConnection:Disconnect()
+                stompConnection = nil
+            end
+            
+            if getgenv().DesyncLibrary then
+                getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+            end
+            
+            K:Notification("Auto Stomp disabled", 2, z(255, 0, 0))
+        end
+        
+        function AutoStompFramework.isEnabled()
+            return isStomping
+        end
+        
+        _G.AutoStompFramework = AutoStompFramework
+    end
+
     do -- AutoArmor Framework
         local AutoArmorFramework = {}
         local armorConnection = nil
@@ -946,9 +1089,10 @@ do -- Ragebot Tab
         local isBuying = false
         
         local function GetArmorItem()
-            local shopItems = workspace.Ignored and workspace.Ignored.Shop and workspace.Ignored.Shop:GetChildren()
-            if shopItems and #shopItems >= 28 then
-                return shopItems[28]
+            local shop = workspace.Ignored and workspace.Ignored.Shop
+            if shop then
+                local armorItem = shop:FindFirstChild("[Full Armor] - $1659")
+                return armorItem
             end
             return nil
         end
@@ -963,7 +1107,7 @@ do -- Ragebot Tab
             end
             
             if not player.Character:FindFirstChild("BodyEffects") or 
-               not player.Character.BodyEffects:FindFirstChild("Armor") then
+               not player.Character.BodyEffects:FindFirstChild("Armor") then 
                 return
             end
             
@@ -976,18 +1120,18 @@ do -- Ragebot Tab
             isBuying = true -- Блокируем повторные вызовы
             
             -- Уведомление о начале цикла покупки
-            K:Notification("Buying armor...", 1, z(255, 255, 0))
+            K:Notification("Buying armor...", 2, z(255, 255, 0))
             
             -- Используем новый desync фреймворк для покупки
             if getgenv().DesyncLibrary then
                 local success = pcall(function()
                     -- Перемещаемся к объекту брони через новый desync API
                     getgenv().DesyncLibrary.movedesyncto(armorItem.Head.CFrame)
-                    task.wait(0.5)
+                    wait(0.5)
                     
                     -- Покупаем броню
                     fireclickdetector(armorItem.ClickDetector)
-                    task.wait(0.5)
+                    wait(0.5)
                     
                     -- Синхронизируемся с локальным игроком
                     getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
@@ -1000,8 +1144,12 @@ do -- Ragebot Tab
                     end)
                 end
                 
-                -- Уведомление о завершении цикла
-                K:Notification("Armor buyed, player synced", 1, z(0, 255, 0))
+                -- Проверяем броню после покупки
+                wait(0.2) -- Небольшая задержка для обновления значения
+                local newArmor = player.Character.BodyEffects.Armor.Value
+                if newArmor >= 200 then
+                    K:Notification("Armor buyed, player synced", 2, z(0, 255, 0))
+                end
             end
             
             isBuying = false -- Разблокируем после завершения
@@ -1014,9 +1162,23 @@ do -- Ragebot Tab
             end
             
             if K.Flags["AutoArmorEnabled"] then
+                -- Используем более эффективный подход с таймером
+                local lastCheck = 0
                 armorConnection = b.Heartbeat:Connect(function()
-                    task.wait(1)
-                    BuyArmor()
+                    -- Проверяем флаг каждый кадр
+                    if not K.Flags["AutoArmorEnabled"] then
+                        if armorConnection then
+                            armorConnection:Disconnect()
+                            armorConnection = nil
+                        end
+                        return
+                    end
+                    
+                    local currentTime = os.clock()
+                    if currentTime - lastCheck >= 1 then
+                        lastCheck = currentTime
+                        BuyArmor()
+                    end
                 end)
             end
         end
@@ -1028,7 +1190,6 @@ do -- Ragebot Tab
                 armorConnection = nil
             end
         end
-        AutoArmorFramework.connections = {}
         
         -- Обработка смерти игрока
         local function OnCharacterRemoving()
@@ -1048,13 +1209,9 @@ do -- Ragebot Tab
             end
         end
         
-        -- Подключаем обработчики смерти с возможностью отключения
-        local charRemovingConn = g.CharacterRemoving:Connect(OnCharacterRemoving)
-        local charAddedConn = g.CharacterAdded:Connect(OnCharacterAdded)
-        
-        -- Сохраняем подключения для возможного отключения
-        AutoArmorFramework.connections.charRemoving = charRemovingConn
-        AutoArmorFramework.connections.charAdded = charAddedConn
+        -- Подключаем обработчики смерти
+        g.CharacterRemoving:Connect(OnCharacterRemoving)
+        g.CharacterAdded:Connect(OnCharacterAdded)
         
         -- Если персонаж уже существует
         if g.Character then
@@ -1123,13 +1280,13 @@ do -- Settings Tab
                     if not isfile(a4) then
                         local a5 = K:GetConfig()
                         writefile(a4, a5)
-                        K:Notification("Config created: " .. a3, 1, z(0, 255, 0))
+                        K:Notification("Config created: " .. a3, 3, z(0, 255, 0))
                         _:Refresh(X())
                     else
-                        K:Notification("Config already exists: " .. a3, 1, z(255, 0, 0))
+                        K:Notification("Config already exists: " .. a3, 3, z(255, 0, 0))
                     end
                 else
-                    K:Notification("Please enter a config name", 1, z(255, 255, 0))
+                    K:Notification("Please enter a config name", 3, z(255, 255, 0))
                 end
             end}
     )
@@ -1146,10 +1303,10 @@ do -- Settings Tab
                     local a4 = "fentanyl/Configs/" .. a3
                     local a5 = K:GetConfig()
                     writefile(a4, a5)
-                    K:Notification("Config saved: " .. a3, 1, z(0, 255, 0))
+                    K:Notification("Config saved: " .. a3, 3, z(0, 255, 0))
                     _:Refresh(X())
                 else
-                    K:Notification("Please select or enter a config name", 1, z(255, 255, 0))
+                    K:Notification("Please select or enter a config name", 3, z(255, 255, 0))
                 end
             end}
     )
@@ -1161,12 +1318,12 @@ do -- Settings Tab
                     if isfile(a4) then
                         local a5 = readfile(a4)
                         K:LoadConfig(a5)
-                        K:Notification("Config loaded: " .. U, 1, z(0, 255, 0))
+                        K:Notification("Config loaded: " .. U, 3, z(0, 255, 0))
                     else
-                        K:Notification("Config not found: " .. U, 1, z(255, 0, 0))
+                        K:Notification("Config not found: " .. U, 3, z(255, 0, 0))
                     end
                 else
-                    K:Notification("Please select a config", 1, z(255, 255, 0))
+                    K:Notification("Please select a config", 3, z(255, 255, 0))
                 end
             end}
     )
@@ -1179,14 +1336,14 @@ do -- Settings Tab
                     print("File exists:", isfile(a4))
                     if isfile(a4) then
                         delfile(a4)
-                        K:Notification("Config deleted: " .. U, 1, z(0, 255, 0))
+                        K:Notification("Config deleted: " .. U, 3, z(0, 255, 0))
                         _:Refresh(X())
                         U = ""
                     else
-                        K:Notification("Config not found: " .. a4, 1, z(255, 0, 0))
+                        K:Notification("Config not found: " .. a4, 5, z(255, 0, 0))
                     end
                 else
-                    K:Notification("Please select a config", 1, z(255, 255, 0))
+                    K:Notification("Please select a config", 3, z(255, 255, 0))
                 end
             end}
     )
@@ -1194,7 +1351,7 @@ do -- Settings Tab
         T:Button(
         {Name = "Refresh Config List", Callback = function()
                 _:Refresh(X())
-                K:Notification("Config list refreshed", 1, z(0, 255, 0))
+                K:Notification("Config list refreshed", 2, z(0, 255, 0))
             end}
     )
     local aa = S:Section({Name = "Theming", Side = 2})
@@ -1377,14 +1534,14 @@ do -- Settings Tab
             aF:Button(
             {Name = "Copy GameID", Callback = function()
                     setclipboard(tostring(game.GameId))
-                    K:Notification("GameID copied to clipboard", 1, z(0, 255, 0))
+                    K:Notification("GameID copied to clipboard", 2, z(0, 255, 0))
                 end}
         )
         local aH =
             aF:Button(
             {Name = "Copy JobID", Callback = function()
                     setclipboard(game.JobId)
-                    K:Notification("JobID copied to clipboard", 1, z(0, 255, 0))
+                    K:Notification("JobID copied to clipboard", 2, z(0, 255, 0))
                 end}
         )
         local aI =
@@ -1396,7 +1553,7 @@ do -- Settings Tab
                         'game:GetService("TeleportService"):TeleportToPlaceInstance(' ..
                         game.PlaceId .. ', "' .. game.JobId .. '", game.Players.LocalPlayer)'
                     setclipboard(aJ)
-                    K:Notification("Join script copied to clipboard", 1, z(0, 255, 0))
+                    K:Notification("Join script copied to clipboard", 2, z(0, 255, 0))
                 end
             }
         )
@@ -1426,11 +1583,11 @@ do -- Settings Tab
                         local aO = aN.data[h(1, #aN.data)]
                         D:TeleportToPlaceInstance(game.PlaceId, aO.id)
                     else
-                        K:Notification("Failed to get server list", 1, z(255, 0, 0))
+                        K:Notification("Failed to get server list", 3, z(255, 0, 0))
                     end
                 end
             }
         )
     end
 end
-K:Notification("Script loaded, press Insert to toggle GUI", 1, z(0, 255, 0))
+K:Notification("Script loaded, press Insert to toggle GUI", 4, z(0, 255, 0))
