@@ -49,6 +49,8 @@ local getgenv = getgenv
 local task = task
 local wait = wait
 local fireclickdetector = fireclickdetector
+local getconnections = getconnections
+local debug = debug
 local E = {}
 local F = {}
 do
@@ -697,6 +699,42 @@ do -- Ragebot Tab
         })
     end
     
+    do -- Gun Section
+        local gunSection = M:Section({Name = "Gun", Side = 1})
+        
+        local _rapidFireToggle = gunSection:Toggle({
+            Name = "Rapid Fire",
+            Default = false,
+            Flag = "RapidFireEnabled",
+            Callback = function(enabled)
+                if _G.RapidFireFramework then
+                    _G.RapidFireFramework.setEnabled(enabled)
+                end
+            end
+        })
+        
+        local _infinityAmmoToggle = gunSection:Toggle({
+            Name = "Infinity Ammo",
+            Default = false,
+            Flag = "InfinityAmmoEnabled",
+            Callback = function(enabled)
+                if _G.InfinityAmmoFramework then
+                    _G.InfinityAmmoFramework.setEnabled(enabled)
+                end
+            end
+        })
+        
+        local _infinityRangeToggle = gunSection:Toggle({
+            Name = "Infinity Range",
+            Default = false,
+            Flag = "InfinityRangeEnabled",
+            Callback = function(enabled)
+                if _G.InfinityRangeFramework then
+                    _G.InfinityRangeFramework.setEnabled(enabled)
+                end
+            end
+        })
+    end
     
     do -- Notify Section
         local aT = M:Section({Name = "Notify", Side = 2})
@@ -876,6 +914,352 @@ do -- Ragebot Tab
         _G.AimbotFramework = AimbotFramework
     end
     
+    do -- Infinity Range Framework
+        local InfinityRangeFramework = {
+            enabled = false,
+            connection = nil,
+            originalValues = {}
+        }
+        
+        local function findRangeValues(weapon)
+            local rangeValues = {}
+            
+            -- Прямой поиск в оружии
+            local range = weapon:FindFirstChild("Range") or 
+                         weapon:FindFirstChild("MaxRange") or 
+                         weapon:FindFirstChild("Distance") or
+                         weapon:FindFirstChild("MaxDistance") or
+                         weapon:FindFirstChild("Reach")
+            if range then
+                p(rangeValues, range)
+            end
+            
+            -- Поиск в Configuration/Settings
+            local config = weapon:FindFirstChild("Configuration") or 
+                          weapon:FindFirstChild("Settings") or
+                          weapon:FindFirstChild("Config") or
+                          weapon:FindFirstChild("Stats")
+            if config then
+                local configRange = config:FindFirstChild("Range") or 
+                                   config:FindFirstChild("MaxRange") or
+                                   config:FindFirstChild("Distance") or
+                                   config:FindFirstChild("MaxDistance") or
+                                   config:FindFirstChild("Reach") or
+                                   config:FindFirstChild("FireRange")
+                if configRange then
+                    p(rangeValues, configRange)
+                end
+            end
+            
+            -- Поиск в Handle
+            local handle = weapon:FindFirstChild("Handle")
+            if handle then
+                local handleRange = handle:FindFirstChild("Range") or 
+                                   handle:FindFirstChild("MaxRange") or
+                                   handle:FindFirstChild("Distance")
+                if handleRange then
+                    p(rangeValues, handleRange)
+                end
+                
+                -- Поиск в Handle/Configuration
+                local handleConfig = handle:FindFirstChild("Configuration") or 
+                                    handle:FindFirstChild("Settings")
+                if handleConfig then
+                    local hcRange = handleConfig:FindFirstChild("Range") or 
+                                   handleConfig:FindFirstChild("MaxRange") or
+                                   handleConfig:FindFirstChild("Distance")
+                    if hcRange then
+                        p(rangeValues, hcRange)
+                    end
+                end
+            end
+            
+            -- Поиск в GunScript или аналогичных скриптах
+            local gunScript = weapon:FindFirstChild("GunScript") or 
+                             weapon:FindFirstChild("WeaponScript") or
+                             weapon:FindFirstChild("Script")
+            if gunScript then
+                local scriptRange = gunScript:FindFirstChild("Range") or 
+                                   gunScript:FindFirstChild("MaxRange")
+                if scriptRange then
+                    p(rangeValues, scriptRange)
+                end
+            end
+            
+            return rangeValues
+        end
+        
+        local function updateRange(weapon)
+            local rangeValues = findRangeValues(weapon)
+            
+            for _, rangeValue in ipairs(rangeValues) do
+                if rangeValue:IsA("NumberValue") or rangeValue:IsA("IntValue") then
+                    -- Сохраняем оригинальное значение если еще не сохранили
+                    local key = tostring(weapon) .. "_" .. tostring(rangeValue)
+                    if InfinityRangeFramework.enabled then
+                        if not InfinityRangeFramework.originalValues[key] then
+                            InfinityRangeFramework.originalValues[key] = rangeValue.Value
+                        end
+                        -- Устанавливаем огромное значение
+                        rangeValue.Value = 999999999999999999
+                    else
+                        -- Восстанавливаем оригинальное значение
+                        if InfinityRangeFramework.originalValues[key] then
+                            rangeValue.Value = InfinityRangeFramework.originalValues[key]
+                        end
+                    end
+                end
+            end
+        end
+        
+        function InfinityRangeFramework.setEnabled(state)
+            InfinityRangeFramework.enabled = state
+            
+            if state and not InfinityRangeFramework.connection then
+                InfinityRangeFramework.connection = E.new_connection(b.Heartbeat, function()
+                    if not InfinityRangeFramework.enabled then
+                        return
+                    end
+                    
+                    -- Ищем оружие в руках
+                    local character = g.Character
+                    if character then
+                        local tool = character:FindFirstChildOfClass("Tool")
+                        if tool then
+                            pcall(function()
+                                updateRange(tool)
+                            end)
+                        end
+                    end
+                    
+                    -- Ищем оружие в workspace.Players
+                    local playersFolder = workspace:FindFirstChild("Players")
+                    if playersFolder then
+                        local playerFolder = playersFolder:FindFirstChild(g.Name)
+                        if playerFolder then
+                            for _, child in ipairs(playerFolder:GetChildren()) do
+                                local name = child.Name
+                                if name:match("%[.+%]") or 
+                                   name:match("Gun") or 
+                                   name:match("Pistol") or 
+                                   name:match("Rifle") or
+                                   name:match("Shotgun") or
+                                   name:match("Revolver") then
+                                    pcall(function()
+                                        updateRange(child)
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end)
+            elseif not state then
+                -- Восстанавливаем все оригинальные значения
+                local character = g.Character
+                if character then
+                    local tool = character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        pcall(function()
+                            updateRange(tool)
+                        end)
+                    end
+                end
+                
+                local playersFolder = workspace:FindFirstChild("Players")
+                if playersFolder then
+                    local playerFolder = playersFolder:FindFirstChild(g.Name)
+                    if playerFolder then
+                        for _, child in ipairs(playerFolder:GetChildren()) do
+                            pcall(function()
+                                updateRange(child)
+                            end)
+                        end
+                    end
+                end
+                
+                if InfinityRangeFramework.connection then
+                    InfinityRangeFramework.connection:Disconnect()
+                    InfinityRangeFramework.connection = nil
+                end
+                
+                -- Очищаем сохраненные значения
+                InfinityRangeFramework.originalValues = {}
+            end
+        end
+        
+        _G.InfinityRangeFramework = InfinityRangeFramework
+    end
+    
+    do -- Infinity Ammo Framework
+        local InfinityAmmoFramework = {
+            enabled = false,
+            connection = nil
+        }
+        
+        local function updateAmmo()
+            -- Работаем только через workspace.Players
+            local playersFolder = workspace:FindFirstChild("Players")
+            if not playersFolder then return end
+            
+            local playerFolder = playersFolder:FindFirstChild(g.Name)
+            if not playerFolder then return end
+            
+            -- Проходим по всем объектам в папке игрока
+            for _, weapon in ipairs(playerFolder:GetChildren()) do
+                local name = weapon.Name
+                -- Проверяем типичные паттерны названий оружия
+                if name:match("%[.+%]") or -- [Revolver], [Shotgun] и т.д.
+                   name:match("Gun") or 
+                   name:match("Pistol") or 
+                   name:match("Rifle") or
+                   name:match("Shotgun") or
+                   name:match("Revolver") or
+                   name:match("SMG") or
+                   name:match("AK") or
+                   name:match("Glock") or
+                   name:match("Weapon") then
+                    
+                    -- Ищем патроны в оружии
+                    local ammoValue = weapon:FindFirstChild("Ammo") or 
+                                     weapon:FindFirstChild("Bullets") or 
+                                     weapon:FindFirstChild("Clip") or
+                                     weapon:FindFirstChild("CurrentAmmo")
+                    
+                    local maxAmmoValue = weapon:FindFirstChild("MaxAmmo") or 
+                                        weapon:FindFirstChild("MaxBullets") or 
+                                        weapon:FindFirstChild("ClipSize") or
+                                        weapon:FindFirstChild("MaxClip")
+                    
+                    -- Если не нашли, ищем в Configuration
+                    if not ammoValue then
+                        local config = weapon:FindFirstChild("Configuration") or 
+                                      weapon:FindFirstChild("Settings") or
+                                      weapon:FindFirstChild("Config")
+                        if config then
+                            ammoValue = config:FindFirstChild("Ammo") or 
+                                       config:FindFirstChild("Bullets") or
+                                       config:FindFirstChild("CurrentAmmo")
+                            maxAmmoValue = maxAmmoValue or config:FindFirstChild("MaxAmmo") or 
+                                          config:FindFirstChild("MaxBullets") or
+                                          config:FindFirstChild("ClipSize")
+                        end
+                    end
+                    
+                    -- Если не нашли, ищем в Handle
+                    if not ammoValue then
+                        local handle = weapon:FindFirstChild("Handle")
+                        if handle then
+                            ammoValue = handle:FindFirstChild("Ammo") or 
+                                       handle:FindFirstChild("Bullets")
+                            maxAmmoValue = maxAmmoValue or handle:FindFirstChild("MaxAmmo") or 
+                                          handle:FindFirstChild("MaxBullets")
+                        end
+                    end
+                    
+                    -- Обновляем патроны если нашли
+                    if ammoValue and maxAmmoValue then
+                        if (ammoValue:IsA("NumberValue") or ammoValue:IsA("IntValue")) and
+                           (maxAmmoValue:IsA("NumberValue") or maxAmmoValue:IsA("IntValue")) then
+                            if ammoValue.Value ~= maxAmmoValue.Value then
+                                ammoValue.Value = maxAmmoValue.Value
+                            end
+                        end
+                    elseif ammoValue and not maxAmmoValue then
+                        -- Если нет максимального значения, устанавливаем большое число
+                        if ammoValue:IsA("NumberValue") or ammoValue:IsA("IntValue") then
+                            if ammoValue.Value < 999 then
+                                ammoValue.Value = 999
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        function InfinityAmmoFramework.setEnabled(state)
+            InfinityAmmoFramework.enabled = state
+            
+            if state and not InfinityAmmoFramework.connection then
+                InfinityAmmoFramework.connection = E.new_connection(b.Heartbeat, function()
+                    if not InfinityAmmoFramework.enabled then
+                        return
+                    end
+                    
+                    pcall(updateAmmo)
+                end)
+            elseif not state and InfinityAmmoFramework.connection then
+                InfinityAmmoFramework.connection:Disconnect()
+                InfinityAmmoFramework.connection = nil
+            end
+        end
+        
+        _G.InfinityAmmoFramework = InfinityAmmoFramework
+    end
+    
+    do -- Rapid Fire Framework
+        local RapidFireFramework = {
+            enabled = false,
+            original = {},
+            connection = nil
+        }
+        
+        function RapidFireFramework.setEnabled(state)
+            RapidFireFramework.enabled = state
+            
+            if state and not RapidFireFramework.connection then
+                RapidFireFramework.connection = E.new_connection(b.RenderStepped, function()
+                    if not RapidFireFramework.enabled then
+                        return
+                    end
+                    
+                    local tool = g.Character and g.Character:FindFirstChildOfClass("Tool")
+                    if tool and tool:FindFirstChild("GunScript") then
+                        for _, connection in ipairs(getconnections(tool.Activated)) do
+                            local func = connection.Function
+                            if func then
+                                local funcInfo = debug.getinfo(func)
+                                for i = 1, funcInfo.nups do
+                                    local c, _n = debug.getupvalue(func, i)
+                                    if type(c) == "number" then
+                                        if not RapidFireFramework.original[i] then
+                                            RapidFireFramework.original[i] = c
+                                        end
+                                        debug.setupvalue(func, i, RapidFireFramework.enabled and 0.00000000000000000001 or RapidFireFramework.original[i])
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end)
+            elseif not state and RapidFireFramework.connection then
+                -- Восстанавливаем оригинальные значения
+                local tool = g.Character and g.Character:FindFirstChildOfClass("Tool")
+                if tool and tool:FindFirstChild("GunScript") then
+                    for _, connection in ipairs(getconnections(tool.Activated)) do
+                        local func = connection.Function
+                        if func then
+                            local funcInfo = debug.getinfo(func)
+                            for i = 1, funcInfo.nups do
+                                local c, _n = debug.getupvalue(func, i)
+                                if type(c) == "number" and RapidFireFramework.original[i] then
+                                    debug.setupvalue(func, i, RapidFireFramework.original[i])
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if RapidFireFramework.connection then
+                    RapidFireFramework.connection:Disconnect()
+                    RapidFireFramework.connection = nil
+                end
+                RapidFireFramework.original = {}
+            end
+        end
+        
+        _G.RapidFireFramework = RapidFireFramework
+    end
+    
     do -- Beam Visualization
         local currentBeam = nil
         local beamConnection = nil
@@ -1017,7 +1401,7 @@ do -- Ragebot Tab
         
         local function getRandomVoidPosition()
             local x = h() * 5000 - 1000 -- random от -1000 до 1000
-            local y = -i -- -math.huge
+            local y = -100000 -- -math.huge
             local z = h() * 5000 - 1000 -- random от -1000 до 1000
             return B(x, y, z)
         end
