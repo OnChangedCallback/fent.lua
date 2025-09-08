@@ -819,7 +819,7 @@ do -- Ragebot Tab
         })
         
         local _infinityAmmoToggle = gunSection:Toggle({
-            Name = "Infinity Ammo",
+            Name = "Infinity Ammo (maypatched)",
             Default = false,
             Flag = "InfinityAmmoEnabled",
             Callback = function(enabled)
@@ -890,6 +890,21 @@ do -- Ragebot Tab
                         _G.WallbangFramework.start()
                     else
                         _G.WallbangFramework.stop()
+                    end
+                end
+            end
+        })
+        
+        local _noSpreadToggle = exploitsSection:Toggle({
+            Name = "NoSpread",
+            Default = false,
+            Flag = "NoSpreadEnabled",
+            Callback = function(enabled)
+                if _G.NoSpreadFramework then
+                    if enabled then
+                        _G.NoSpreadFramework.start()
+                    else
+                        _G.NoSpreadFramework.stop()
                     end
                 end
             end
@@ -1240,6 +1255,69 @@ do -- Ragebot Tab
         end
         
         _G.WallbangFramework = WallbangFramework
+    end
+    
+    do -- NoSpread Framework
+        local NoSpreadFramework = {
+            enabled = false,
+            originalMathRandom = nil,
+            hookedFunction = nil
+        }
+        
+        function NoSpreadFramework.start()
+            if NoSpreadFramework.enabled then
+                return
+            end
+            
+            -- Создаем хук для math.random
+            local old
+            old = hookfunction(math.random, function(...)
+                local args = {...}
+                
+                -- Проверяем, вызывается ли из нашего кода
+                if checkcaller() then
+                    return old(...)
+                end
+                
+                -- Проверяем аргументы для spread
+                if (#args == 0) or 
+                   (args[1] == -0.05 and args[2] == 0.05) or 
+                   (args[1] == -0.1) or
+                   (args[1] == -0.05) then
+                    
+                    -- Если NoSpread включен, возвращаем минимальный spread (1% от оригинала)
+                    local originalResult = old(...)
+                    return originalResult * 0.01 -- 1% spread
+                end
+                
+                return old(...)
+            end)
+            
+            NoSpreadFramework.originalMathRandom = old
+            
+            NoSpreadFramework.enabled = true
+            print("[NoSpread] Framework started - bullet spread reduced to 1%")
+        end
+        
+        function NoSpreadFramework.stop()
+            if not NoSpreadFramework.enabled then
+                return
+            end
+            
+            -- Восстанавливаем оригинальную функцию math.random
+            if NoSpreadFramework.originalMathRandom then
+                pcall(function()
+                    hookfunction(math.random, NoSpreadFramework.originalMathRandom)
+                end)
+            end
+            
+            NoSpreadFramework.enabled = false
+            NoSpreadFramework.originalMathRandom = nil
+            NoSpreadFramework.hookedFunction = nil
+            print("[NoSpread] Framework stopped - original bullet spread restored")
+        end
+        
+        _G.NoSpreadFramework = NoSpreadFramework
     end
     
     do -- Infinity Range Framework
@@ -1800,6 +1878,12 @@ do -- Ragebot Tab
         
         function HideFramework.resume()
             isPaused = false
+            -- При возобновлении сразу применяем Hide позицию если фреймворк активен
+            if isHiding and getgenv().DesyncLibrary then
+                local voidPos = getRandomVoidPosition()
+                getgenv().DesyncLibrary.movedesyncto(voidPos.X, voidPos.Y, voidPos.Z)
+                print("[Hide] Resumed and applied hide position")
+            end
         end
         
         function HideFramework.isEnabled()
@@ -2047,6 +2131,16 @@ do -- Ragebot Tab
                     print("[AutoArmor] Syncing with player")
                     -- Синхронизируемся с локальным игроком
                     getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    
+                    -- Проверяем, нужно ли восстановить Hide после синхронизации
+                    task.wait(0.1) -- Небольшая задержка после синхронизации
+                    if _G.HideFramework and _G.HideFramework.isEnabled() and not _G.HideFramework.isPaused() then
+                        local x = h() * 5000 - 1000
+                        local y = -100000
+                        local z = h() * 5000 - 1000
+                        getgenv().DesyncLibrary.movedesyncto(x, y, z)
+                        print("[AutoArmor] Restored Hide position after sync")
+                    end
                 end)
                 
                 if not success then
@@ -2054,6 +2148,16 @@ do -- Ragebot Tab
                     -- В случае ошибки синхронизируемся с локальным игроком
                     pcall(function()
                         getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        
+                        -- Проверяем, нужно ли восстановить Hide после синхронизации
+                        task.wait(0.1)
+                        if _G.HideFramework and _G.HideFramework.isEnabled() and not _G.HideFramework.isPaused() then
+                            local x = h() * 5000 - 1000
+                            local y = -100000
+                            local z = h() * 5000 - 1000
+                            getgenv().DesyncLibrary.movedesyncto(x, y, z)
+                            print("[AutoArmor] Restored Hide position after error sync")
+                        end
                     end)
                 end
                 
