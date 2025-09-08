@@ -28,6 +28,8 @@ local z = Color3.fromRGB
 local A = UDim2.new
 local B = Vector3.new
 local C = CFrame.new
+local replicated_storage = game:GetService("ReplicatedStorage")
+local main_remote = replicated_storage.MainRemotes:WaitForChild("MainRemoteEvent")
 local isfolder = isfolder
 local isfile = isfile
 local listfiles = listfiles
@@ -910,6 +912,17 @@ do -- Ragebot Tab
                 end
             end
         })
+        
+        local _autoReloadToggle = gunSection:Toggle({
+            Name = "AutoReload",
+            Default = false,
+            Flag = "AutoReloadEnabled",
+            Callback = function(enabled)
+                if _G.AutoReloadFramework then
+                    _G.AutoReloadFramework.setEnabled(enabled)
+                end
+            end
+        })
     end
     
     do -- Notify Section
@@ -1245,6 +1258,91 @@ do -- Ragebot Tab
         end
         
         _G.ForceHitFramework = ForceHitFramework
+    end
+    
+    do -- AutoReload Framework
+        local AutoReloadFramework = {
+            enabled = false,
+            connection = nil,
+            reloadDelay = 1.0, -- Задержка после перезарядки
+            lastReloadTime = 0,
+            mainModule = nil
+        }
+        
+        function AutoReloadFramework.start()
+            if AutoReloadFramework.connection then
+                return
+            end
+            
+            -- Получаем MainModule
+            local handler = replicated_storage:FindFirstChild("MainModule")
+            if not handler then
+                return
+            end
+            
+            local success, module = pcall(function()
+                return require(handler)
+            end)
+            
+            if not success or not module then
+                return
+            end
+            
+            AutoReloadFramework.mainModule = module
+            AutoReloadFramework.enabled = true
+            
+            AutoReloadFramework.connection = E.new_connection(b.Heartbeat, function()
+                if not AutoReloadFramework.enabled then
+                    return
+                end
+                
+                -- Проверяем задержку после последней перезарядки
+                local now = os.clock()
+                if now - AutoReloadFramework.lastReloadTime < AutoReloadFramework.reloadDelay then
+                    return
+                end
+                
+                local character = g.Character
+                if not character then
+                    return
+                end
+                
+                -- Используем новую логику с MainModule.GunHold
+                local gun = AutoReloadFramework.mainModule.GunHold(character)
+                if not gun or not gun[1] then
+                    return
+                end
+                
+                local tool = gun[1]
+                local ammo = tool:FindFirstChild("Ammo")
+                if not ammo or ammo.Value > 0 then
+                    return
+                end
+                
+                -- Перезаряжаем оружие через новый remote
+                main_remote:FireServer("Reload", tool)
+                AutoReloadFramework.lastReloadTime = now
+            end)
+        end
+        
+        function AutoReloadFramework.stop()
+            if AutoReloadFramework.connection then
+                AutoReloadFramework.connection:Disconnect()
+                AutoReloadFramework.connection = nil
+            end
+            AutoReloadFramework.enabled = false
+            AutoReloadFramework.mainModule = nil
+        end
+        
+        function AutoReloadFramework.setEnabled(enabled)
+            if enabled then
+                AutoReloadFramework.start()
+            else
+                AutoReloadFramework.stop()
+            end
+        end
+        
+        _G.AutoReloadFramework = AutoReloadFramework
     end
     
     do -- Wallbang Framework
@@ -2500,6 +2598,166 @@ do -- Ragebot Tab
         
         _G.CircleFramework = CircleFramework
     end
+    
+    do -- Snapline Framework
+        local SnaplineFramework = {
+            enabled = false,
+            origin = "center", -- bot, top, center, mouse
+            color = z(255, 255, 255),
+            outline_color = z(0, 0, 0),
+            thickness = 1.5,
+            outline_thickness = 3.0,
+            transparency = 1.0,
+            outline_transparency = 1.0,
+            line = nil,
+            outline_line = nil,
+            conn = nil
+        }
+        
+        local function cleanup_snapline()
+            if SnaplineFramework.conn then 
+                SnaplineFramework.conn:Disconnect()
+                SnaplineFramework.conn = nil 
+            end
+            if SnaplineFramework.line then 
+                pcall(function() SnaplineFramework.line:Remove() end)
+                SnaplineFramework.line = nil
+            end
+            if SnaplineFramework.outline_line then 
+                pcall(function() SnaplineFramework.outline_line:Remove() end)
+                SnaplineFramework.outline_line = nil
+            end
+        end
+        
+        local function get_origin_position()
+            local origin_pos
+            if SnaplineFramework.origin == "bot" then
+                origin_pos = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y)
+            elseif SnaplineFramework.origin == "top" then
+                origin_pos = Vector2.new(cam.ViewportSize.X / 2, 0)
+            elseif SnaplineFramework.origin == "center" then
+                origin_pos = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+            elseif SnaplineFramework.origin == "mouse" then
+                origin_pos = c:GetMouseLocation()
+            else
+                origin_pos = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+            end
+            return origin_pos
+        end
+        
+        local function update_snapline()
+            if not SnaplineFramework.enabled then
+                cleanup_snapline()
+                return
+            end
+            
+            -- Получаем текущую цель из TargetingFramework
+            local target_info = _G.TargetingFramework and _G.TargetingFramework._target and _G.TargetingFramework._target.info
+            if not target_info or not target_info.player then
+                if SnaplineFramework.line then
+                    SnaplineFramework.line.Visible = false
+                end
+                if SnaplineFramework.outline_line then
+                    SnaplineFramework.outline_line.Visible = false
+                end
+                return
+            end
+            
+            local target_player = target_info.player
+            local char = target_player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            
+            if not (char and root and hum and hum.Health > 0) then
+                if SnaplineFramework.line then
+                    SnaplineFramework.line.Visible = false
+                end
+                if SnaplineFramework.outline_line then
+                    SnaplineFramework.outline_line.Visible = false
+                end
+                return
+            end
+            
+            -- Создаем outline линию если её нет
+            if not SnaplineFramework.outline_line then
+                SnaplineFramework.outline_line = Drawing.new("Line")
+                SnaplineFramework.outline_line.ZIndex = 0
+            end
+            
+            -- Создаем основную линию если её нет
+            if not SnaplineFramework.line then
+                SnaplineFramework.line = Drawing.new("Line")
+                SnaplineFramework.line.ZIndex = 1
+            end
+            
+            local target_pos, onScreen = cam:WorldToViewportPoint(root.Position)
+            if not onScreen or target_pos.Z <= 0 then
+                SnaplineFramework.line.Visible = false
+                SnaplineFramework.outline_line.Visible = false
+                return
+            end
+            
+            local origin_pos = get_origin_position()
+            local target_2d = Vector2.new(target_pos.X, target_pos.Y)
+            
+            -- Настройка outline линии
+            SnaplineFramework.outline_line.From = origin_pos
+            SnaplineFramework.outline_line.To = target_2d
+            SnaplineFramework.outline_line.Color = SnaplineFramework.outline_color
+            SnaplineFramework.outline_line.Thickness = SnaplineFramework.outline_thickness
+            SnaplineFramework.outline_line.Transparency = SnaplineFramework.outline_transparency
+            SnaplineFramework.outline_line.Visible = true
+            
+            -- Настройка основной линии
+            SnaplineFramework.line.From = origin_pos
+            SnaplineFramework.line.To = target_2d
+            SnaplineFramework.line.Color = SnaplineFramework.color
+            SnaplineFramework.line.Thickness = SnaplineFramework.thickness
+            SnaplineFramework.line.Transparency = SnaplineFramework.transparency
+            SnaplineFramework.line.Visible = true
+        end
+        
+        function SnaplineFramework:SetEnabled(v)
+            self.enabled = v
+            if v then
+                if not self.conn then
+                    self.conn = E.new_connection(b.RenderStepped, update_snapline)
+                end
+            else
+                cleanup_snapline()
+            end
+        end
+        
+        function SnaplineFramework:SetOrigin(origin)
+            self.origin = origin
+        end
+        
+        function SnaplineFramework:SetColor(color)
+            self.color = color
+        end
+        
+        function SnaplineFramework:SetThickness(thickness)
+            self.thickness = thickness
+        end
+        
+        function SnaplineFramework:SetTransparency(transparency)
+            self.transparency = transparency
+        end
+        
+        function SnaplineFramework:SetOutlineColor(color)
+            self.outline_color = color
+        end
+        
+        function SnaplineFramework:SetOutlineThickness(thickness)
+            self.outline_thickness = thickness
+        end
+        
+        function SnaplineFramework:SetOutlineTransparency(transparency)
+            self.outline_transparency = transparency
+        end
+        
+        _G.SnaplineFramework = SnaplineFramework
+    end
 end -- End Ragebot Tab
 
 do -- Visuals Tab
@@ -2787,6 +3045,59 @@ do -- Visuals Tab
             Callback = function(color)
                 if _G.CircleFramework then
                     _G.CircleFramework.c4 = color
+                end
+            end
+        })
+        
+        -- Snapline Toggle
+        local _targetSnaplineToggle = targetSection:Toggle({
+            Name = "Snapline",
+            Default = false,
+            Flag = "target_snapline",
+            Callback = function(value)
+                if _G.SnaplineFramework then
+                    _G.SnaplineFramework:SetEnabled(value)
+                end
+            end
+        })
+        
+        -- Snapline Origin Dropdown (размещен сразу после Toggle, как в resolver type)
+        local _snaplineOriginDropdown = targetSection:Dropdown({
+            Name = "Origin",
+            Items = {"Bot", "Top", "Center", "Mouse"},
+            Default = "Center",
+            Flag = "snapline_origin",
+            Callback = function(value)
+                if _G.SnaplineFramework then
+                    _G.SnaplineFramework:SetOrigin(v(value))
+                end
+            end
+        })
+        
+        -- Snapline Color
+        _targetSnaplineToggle:Colorpicker({
+            Name = "Color",
+            Default = z(255, 255, 255),
+            Alpha = 1.0,
+            Flag = "snapline_color",
+            Callback = function(color, alpha)
+                if _G.SnaplineFramework then
+                    _G.SnaplineFramework:SetColor(color)
+                    _G.SnaplineFramework:SetTransparency(alpha or 1.0)
+                end
+            end
+        })
+        
+        -- Snapline Outline Color
+        _targetSnaplineToggle:Colorpicker({
+            Name = "Outline Color",
+            Default = z(0, 0, 0),
+            Alpha = 1.0,
+            Flag = "snapline_outline_color",
+            Callback = function(color, alpha)
+                if _G.SnaplineFramework then
+                    _G.SnaplineFramework:SetOutlineColor(color)
+                    _G.SnaplineFramework:SetOutlineTransparency(alpha or 1.0)
                 end
             end
         })
