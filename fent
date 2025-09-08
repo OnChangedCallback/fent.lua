@@ -866,7 +866,7 @@ do -- Ragebot Tab
         local exploitsSection = M:Section({Name = "Exploits", Side = 2})
         
         local _forceHitToggle = exploitsSection:Toggle({
-            Name = "Force Hit (Magic Bullets)",
+            Name = "Magic Bullets",
             Default = false,
             Flag = "ForceHitEnabled",
             Callback = function(enabled)
@@ -875,6 +875,21 @@ do -- Ragebot Tab
                         _G.ForceHitFramework.start()
                     else
                         _G.ForceHitFramework.stop()
+                    end
+                end
+            end
+        })
+        
+        local _wallbangToggle = exploitsSection:Toggle({
+            Name = "Wallbang",
+            Default = false,
+            Flag = "WallbangEnabled",
+            Callback = function(enabled)
+                if _G.WallbangFramework then
+                    if enabled then
+                        _G.WallbangFramework.start()
+                    else
+                        _G.WallbangFramework.stop()
                     end
                 end
             end
@@ -1138,6 +1153,93 @@ do -- Ragebot Tab
         end
         
         _G.ForceHitFramework = ForceHitFramework
+    end
+    
+    do -- Wallbang Framework
+        local WallbangFramework = {
+            enabled = false,
+            originalIgnored = nil,
+            mainModule = nil
+        }
+        
+        function WallbangFramework.start()
+            if WallbangFramework.enabled then
+                return
+            end
+            
+            -- Получаем MainModule
+            local replicatedStorage = game:GetService("ReplicatedStorage")
+            local handler = replicatedStorage:FindFirstChild("MainModule")
+            if not handler then
+                print("[Wallbang] MainModule not found")
+                return
+            end
+            
+            local success, module = pcall(function()
+                return require(handler)
+            end)
+            
+            if not success or not module then
+                print("[Wallbang] Failed to require MainModule")
+                return
+            end
+            
+            WallbangFramework.mainModule = module
+            
+            -- Сохраняем оригинальные значения
+            if module.Ignored then
+                WallbangFramework.originalIgnored = {}
+                for i, v in ipairs(module.Ignored) do
+                    WallbangFramework.originalIgnored[i] = v
+                end
+                print("[Wallbang] Original Ignored saved:", #WallbangFramework.originalIgnored, "items")
+            else
+                WallbangFramework.originalIgnored = nil
+                print("[Wallbang] No original Ignored found")
+            end
+            
+            -- Устанавливаем новые значения для Wallbang
+            pcall(function()
+                module.Ignored = {
+                    workspace:WaitForChild("Vehicles"), 
+                    workspace:WaitForChild("MAP"), 
+                    workspace:WaitForChild("Ignored")
+                }
+            end)
+            
+            WallbangFramework.enabled = true
+            print("[Wallbang] Framework started - walls will be ignored")
+        end
+        
+        function WallbangFramework.stop()
+            if not WallbangFramework.enabled then
+                return
+            end
+            
+            -- Восстанавливаем оригинальные значения
+            if WallbangFramework.mainModule and WallbangFramework.originalIgnored then
+                pcall(function()
+                    WallbangFramework.mainModule.Ignored = {}
+                    for i, v in ipairs(WallbangFramework.originalIgnored) do
+                        WallbangFramework.mainModule.Ignored[i] = v
+                    end
+                end)
+                print("[Wallbang] Original Ignored restored:", #WallbangFramework.originalIgnored, "items")
+            elseif WallbangFramework.mainModule then
+                -- Если оригинальных значений не было, очищаем
+                pcall(function()
+                    WallbangFramework.mainModule.Ignored = {}
+                end)
+                print("[Wallbang] Ignored cleared (no original values)")
+            end
+            
+            WallbangFramework.enabled = false
+            WallbangFramework.originalIgnored = nil
+            WallbangFramework.mainModule = nil
+            print("[Wallbang] Framework stopped - walls restored")
+        end
+        
+        _G.WallbangFramework = WallbangFramework
     end
     
     do -- Infinity Range Framework
