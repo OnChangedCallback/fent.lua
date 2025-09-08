@@ -174,7 +174,6 @@ do -- Targeting Framework
             -- Получаем RemoteEvent оружия
             local toolRemote = tool:FindFirstChild("RemoteEvent")
             if not toolRemote then
-                print("[ForceHit] Tool RemoteEvent not found")
                 return false
             end
             
@@ -182,27 +181,23 @@ do -- Targeting Framework
             local replicatedStorage = game:GetService("ReplicatedStorage")
             local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
             if not mainRemotes then
-                print("[ForceHit] MainRemotes not found")
                 return false
             end
             
             local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
             if not mainRemoteEvent then
-                print("[ForceHit] MainRemoteEvent not found")
                 return false
             end
             
             -- Выполняем последовательность выстрела как в оригинальном скрипте
             local origin = tool.Handle.Position
-            print("[ForceHit] Shooting from", origin, "to", targetHRP.Position)
-            print("[ForceHit] Tool:", tool.Name)
             
             -- 1. Сначала отправляем "Shoot" через RemoteEvent оружия
             local success1 = pcall(function()
                 toolRemote:FireServer("Shoot")
             end)
             if not success1 then
-                print("[ForceHit] Failed to send Shoot command")
+                return false
             end
             
             -- 2. Отправляем основной выстрел через MainRemoteEvent
@@ -217,9 +212,7 @@ do -- Targeting Framework
                 )
             end)
             if not success2 then
-                print("[ForceHit] Failed to send ShootGun command")
-            else
-                print("[ForceHit] ShootGun command sent successfully")
+                return false
             end
             
             -- 3. Завершаем выстрел
@@ -227,7 +220,7 @@ do -- Targeting Framework
                 toolRemote:FireServer()
             end)
             if not success3 then
-                print("[ForceHit] Failed to send final FireServer command")
+                return false
             end
             
             return success2
@@ -255,14 +248,26 @@ do -- Targeting Framework
             local closestPlayer, closestDistance = nil, nil
             for _, player in ipairs(a:GetPlayers()) do
                 if player ~= g and self.utility:ValidateClient(player) then
-                    local character = player.Character
-                    local targetPart = self.utility:GetPreferredPart(character)
-                    if targetPart then
-                        local screenPos, onScreen = self.utility:ToScreen(targetPart.Position)
-                        if onScreen then
-                            local distance = self.utility:GetMouseDistance(screenPos)
-                            if not closestDistance or distance < closestDistance then
-                                closestPlayer, closestDistance = player, distance
+                    -- Проверяем KO check если включен
+                    local uiLib = _G.FentanylUI
+                    local skipPlayer = false
+                    if uiLib and uiLib.Flags and uiLib.Flags["KOCheckEnabled"] then
+                        if self.utility:isPlayerKO(player) then
+                            -- Пропускаем KO игроков при выборе новой цели
+                            skipPlayer = true
+                        end
+                    end
+                    
+                    if not skipPlayer then
+                        local character = player.Character
+                        local targetPart = self.utility:GetPreferredPart(character)
+                        if targetPart then
+                            local screenPos, onScreen = self.utility:ToScreen(targetPart.Position)
+                            if onScreen then
+                                local distance = self.utility:GetMouseDistance(screenPos)
+                                if not closestDistance or distance < closestDistance then
+                                    closestPlayer, closestDistance = player, distance
+                                end
                             end
                         end
                     end
@@ -363,6 +368,15 @@ do -- Targeting Framework
             else
                 local closestTarget, _distance = TargetingFramework:GetClosestToMouse()
                 if closestTarget then
+                    -- Дополнительная проверка KO для выбранной цели
+                    local uiLib = _G.FentanylUI
+                    if uiLib and uiLib.Flags and uiLib.Flags["KOCheckEnabled"] then
+                        if TargetingFramework.utility:isPlayerKO(closestTarget) then
+                            -- Не выбираем KO игрока
+                            return
+                        end
+                    end
+                    
                     targeting_state.current = closestTarget
                     TargetingFramework:SetTargetInfo(closestTarget)
                     TargetingFramework:SetCurrentTarget(closestTarget)
@@ -381,13 +395,31 @@ do -- Targeting Framework
             end
             
             TargetingFramework._dd.conn = b.Heartbeat:Connect(function()
-                -- Проверяем включен ли таргетинг
-                if not K or not K.Flags or not K.Flags["TargetingEnabled"] then
+                -- Проверяем включен ли таргетинг ИЛИ OnDamage уведомления
+                -- Проверяем через _G чтобы избежать ошибок с порядком инициализации
+                local uiLib = _G.FentanylUI
+                if not uiLib or not uiLib.Flags then
+                    return
+                end
+                
+                -- Если ни таргетинг, ни OnDamage не включены, выходим
+                local targetingEnabled = uiLib.Flags["TargetingEnabled"]
+                local onDamageEnabled = uiLib.Flags["NotifyOnDamage"]
+                
+                if not targetingEnabled and not onDamageEnabled then
                     return
                 end
                 
                 local dd = TargetingFramework._dd
                 local currentTarget = dd.override_player or (targeting_state and targeting_state.current or nil)
+                
+                -- Если есть OnDamage, но нет цели, пытаемся найти ближайшую
+                if not currentTarget and onDamageEnabled then
+                    local closestTarget, _distance = TargetingFramework:GetClosestToMouse()
+                    if closestTarget then
+                        currentTarget = closestTarget
+                    end
+                end
                 
                 if currentTarget ~= dd.last_target then
                     dd.last_target = currentTarget
@@ -426,6 +458,7 @@ do -- Targeting Framework
                         b.Heartbeat:Wait()
                         dd.hum_conn = dd.hum.HealthChanged:Connect(function(newHealth)
                             local maxHealth = dd.hum and dd.hum.MaxHealth or 0
+                            
                             if dd.last_health == nil or dd.last_max == nil or maxHealth ~= dd.last_max then
                                 dd.last_health = newHealth
                                 dd.last_max = maxHealth
@@ -434,14 +467,16 @@ do -- Targeting Framework
                             
                             if newHealth < dd.last_health then
                                 local damage = dd.last_health - newHealth
-                                print("[DamageDetection] Damage detected:", damage, "to", currentTarget.Name)
-                                TargetingFramework:_emit_hit({
+                                
+                                local hitInfo = {
                                     player = currentTarget,
                                     damage = damage,
                                     health = newHealth,
                                     maxHealth = maxHealth,
                                     time = os.clock()
-                                })
+                                }
+                                
+                                TargetingFramework:_emit_hit(hitInfo)
                             end
                             
                             dd.last_health = newHealth
@@ -679,6 +714,10 @@ end
 
 local K =
     loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/library"))()
+
+-- Сохраняем UI библиотеку в _G для доступа из других частей кода
+_G.FentanylUI = K
+
 local L =
     K:Window(
     {
@@ -712,14 +751,12 @@ do -- Ragebot Tab
                     -- Включаем health detection при включении таргетинга
                     if _G.TargetingFramework.StartHealthDetection then
                         _G.TargetingFramework.StartHealthDetection()
-                        print("[Targeting] Health detection started")
                     end
                 else
                     -- Выключаем health detection и очищаем таргет
                     _G.TargetingFramework:StopHealthDetection()
                     _G.TargetingFramework:ClearTargetInfo()
                     _G.TargetingFramework:ClearCurrentTarget()
-                    print("[Targeting] Health detection stopped")
                     if _G.targeting_state then
                         _G.targeting_state.current = nil
                     end
@@ -862,6 +899,19 @@ do -- Ragebot Tab
         })
     end
     
+    do -- Checks Section
+        local checksSection = M:Section({Name = "Checks", Side = 2})
+        
+        local _koCheckToggle = checksSection:Toggle({
+            Name = "KO Check",
+            Default = false,
+            Flag = "KOCheckEnabled",
+            Callback = function(enabled)
+                -- Callback будет обработан через targeting framework
+            end
+        })
+    end
+    
     do -- Exploits Section
         local exploitsSection = M:Section({Name = "Exploits", Side = 2})
         
@@ -978,13 +1028,9 @@ do -- Ragebot Tab
             end)
             
             _G.TargetingFramework:OnHit(function(hitInfo)
-                print("[DamageNotification] Hit event received:", hitInfo and hitInfo.damage or "nil")
                 if K.Flags["NotifyOnDamage"] and hitInfo then
                     local damageText = t("%.1f damage to %s", hitInfo.damage, hitInfo.player.Name)
-                    print("[DamageNotification] Showing notification:", damageText)
                     K:Notification(damageText, 2, z(255, 100, 100))
-                else
-                    print("[DamageNotification] Flag disabled or no hitInfo")
                 end
             end)
         end
@@ -1082,7 +1128,6 @@ do -- Ragebot Tab
             end
             
             ForceHitFramework.enabled = true
-            print("[ForceHit] Framework started")
             
             ForceHitFramework.connection = E.new_connection(b.Heartbeat, function()
                 if not ForceHitFramework.enabled then
@@ -1153,7 +1198,6 @@ do -- Ragebot Tab
                 local success = utility.performForceHit(utility, currentTarget)
                 if success then
                     ForceHitFramework.lastShotTime = now
-                    print("[ForceHit] Shot fired at", currentTarget.Name)
                 end
             end)
         end
@@ -1164,7 +1208,6 @@ do -- Ragebot Tab
                 ForceHitFramework.connection:Disconnect()
                 ForceHitFramework.connection = nil
             end
-            print("[ForceHit] Framework stopped")
         end
         
         _G.ForceHitFramework = ForceHitFramework
@@ -1963,6 +2006,11 @@ do -- Ragebot Tab
                         pcall(function()
                             getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
                         end)
+                        -- Ждем немного после синхронизации, затем возобновляем Hide
+                        task.wait(0.1)
+                        if _G.HideFramework and _G.HideFramework.isEnabled() and _G.HideFramework.isPaused() then
+                            _G.HideFramework.resume()
+                        end
                     end
                     return 
                 end
@@ -1973,6 +2021,11 @@ do -- Ragebot Tab
                         pcall(function()
                             getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
                         end)
+                        -- Ждем немного после синхронизации, затем возобновляем Hide
+                        task.wait(0.1)
+                        if _G.HideFramework and _G.HideFramework.isEnabled() and _G.HideFramework.isPaused() then
+                            _G.HideFramework.resume()
+                        end
                     end
                     return 
                 end
@@ -1983,10 +2036,11 @@ do -- Ragebot Tab
                         pcall(function()
                             getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
                         end)
-                    end
-                    -- Возобновляем Hide если он был приостановлен
-                    if _G.HideFramework and _G.HideFramework.isEnabled() and _G.HideFramework.isPaused() then
-                        _G.HideFramework.resume()
+                        -- Ждем немного после синхронизации, затем возобновляем Hide
+                        task.wait(0.1)
+                        if _G.HideFramework and _G.HideFramework.isEnabled() and _G.HideFramework.isPaused() then
+                            _G.HideFramework.resume()
+                        end
                     end
                     return 
                 end
