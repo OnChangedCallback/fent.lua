@@ -54,6 +54,158 @@ local wait = wait
 local fireclickdetector = fireclickdetector
 local getconnections = getconnections
 local debug = debug
+
+repeat wait() until game:IsLoaded()
+
+-- Предварительная загрузка звуков с таймаутом
+local availableSounds = {}
+local soundsLoaded = false
+
+local function createSoundsFolder()
+    if not isfolder("FentSounds") then
+        makefolder("FentSounds")
+    end
+end
+
+local function downloadSoundWithTimeout(fileName, downloadUrl, timeout)
+    local soundPath = "FentSounds/" .. fileName
+    
+    if isfile(soundPath) then
+        return true
+    end
+    
+    local startTime = tick()
+    local success = false
+    
+    spawn(function()
+        local downloadSuccess, soundData = pcall(function()
+            return game:HttpGet(downloadUrl)
+        end)
+        
+        if downloadSuccess and soundData then
+            writefile(soundPath, soundData)
+            success = true
+        end
+    end)
+    
+    -- Ждем загрузки с таймаутом
+    while (tick() - startTime) < timeout and not success do
+        wait(0.1)
+    end
+    
+    return success
+end
+
+local function fetchAndDownloadSounds()
+    createSoundsFolder()
+    local sounds = {}
+    local totalSounds = 0
+    local loadedSounds = 0
+    
+    print("[Fentanyl] Загрузка списка звуков из репозиториев...")
+    
+    -- Источник 1: OnChangedCallback/sounds
+    local success1, response1 = pcall(function()
+        return game:HttpGet("https://api.github.com/repos/OnChangedCallback/sounds/contents/main")
+    end)
+    
+    if success1 then
+        local jsonSuccess1, data1 = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(response1)
+        end)
+        
+        if jsonSuccess1 and type(data1) == "table" then
+            for _, file in ipairs(data1) do
+                if file.name and file.name:match("%.wav$") then
+                    local fileName = file.name:gsub("%.wav$", "")
+                    table.insert(sounds, {
+                        name = fileName, 
+                        url = file.download_url, 
+                        fullName = file.name,
+                        source = "OnChangedCallback"
+                    })
+                    totalSounds = totalSounds + 1
+                end
+            end
+        end
+    end
+    
+    -- Источник 2: f1nobe7650/Nebula
+    local success2, response2 = pcall(function()
+        return game:HttpGet("https://api.github.com/repos/f1nobe7650/Nebula/contents/Sounds")
+    end)
+    
+    if success2 then
+        local jsonSuccess2, data2 = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(response2)
+        end)
+        
+        if jsonSuccess2 and type(data2) == "table" then
+            for _, file in ipairs(data2) do
+                if file.name and (file.name:match("%.wav$") or file.name:match("%.mp3$") or file.name:match("%.ogg$")) then
+                    local fileName = file.name:gsub("%.%w+$", "")
+                    -- Добавляем префикс для различения источников
+                    table.insert(sounds, {
+                        name = "Nebula_" .. fileName, 
+                        url = "https://github.com/f1nobe7650/Nebula/raw/refs/heads/main/Sounds/" .. file.name, 
+                        fullName = "Nebula_" .. file.name,
+                        source = "Nebula"
+                    })
+                    totalSounds = totalSounds + 1
+                end
+            end
+        end
+    end
+    
+    print("[Fentanyl] Найдено " .. totalSounds .. " звуков из " .. (success1 and "OnChangedCallback" or "") .. (success1 and success2 and " + " or "") .. (success2 and "Nebula" or "") .. ". Начинаю загрузку...")
+    
+    -- Загружаем каждый звук с таймаутом 10 секунд
+    for i, sound in ipairs(sounds) do
+        print("[Fentanyl] Загрузка " .. i .. "/" .. totalSounds .. ": " .. sound.name .. " (" .. sound.source .. ")")
+        
+        local downloaded = downloadSoundWithTimeout(sound.fullName, sound.url, 10)
+        
+        if downloaded then
+            loadedSounds = loadedSounds + 1
+            print("[Fentanyl] ✓ Загружен: " .. sound.name)
+        else
+            print("[Fentanyl] ✗ Пропущен (таймаут): " .. sound.name)
+        end
+    end
+    
+    -- Оставляем только загруженные звуки
+    local finalSounds = {}
+    for _, sound in ipairs(sounds) do
+        if isfile("FentSounds/" .. sound.fullName) then
+            table.insert(finalSounds, sound.name)
+        end
+    end
+    
+    -- Fallback если оба API недоступны
+    if #finalSounds == 0 then
+        print("[Fentanyl] API недоступны, используем fallback звуки")
+        for i = 1, 20 do
+            table.insert(finalSounds, tostring(i))
+        end
+    end
+    
+    print("[Fentanyl] Загрузка звуков завершена: " .. loadedSounds .. "/" .. totalSounds)
+    return finalSounds
+end
+
+-- Загружаем звуки и ждем завершения
+spawn(function()
+    availableSounds = fetchAndDownloadSounds()
+    soundsLoaded = true
+    print("[Fentanyl] Все звуки обработаны, можно инициализировать UI")
+end)
+
+-- Ждем завершения загрузки звуков
+print("[Fentanyl] Ожидание загрузки звуков...")
+while not soundsLoaded do
+    wait(0.5)
+end
+
 -- Circle rendering variables
 local tick = tick
 local Drawing = Drawing
@@ -351,6 +503,108 @@ do -- Targeting Framework
                     cloned:Destroy()
                 end
             end)
+        end
+        
+        -- HitSounds utility functions
+        function utility:createSoundsFolder()
+            if not isfolder("FentSounds") then
+                makefolder("FentSounds")
+            end
+        end
+        
+        function utility:downloadHitSound(soundName)
+            self:createSoundsFolder()
+            
+            -- Проверяем, это звук из Nebula или OnChangedCallback
+            if soundName:match("^Nebula_") then
+                -- Звук из Nebula репозитория
+                local actualFileName = soundName:gsub("^Nebula_", "")
+                local soundPath = "FentSounds/" .. soundName
+                
+                -- Проверяем все возможные расширения для Nebula
+                local extensions = {".wav", ".mp3", ".ogg"}
+                for _, ext in ipairs(extensions) do
+                    local fullPath = soundPath .. ext
+                    if isfile(fullPath) then
+                        return fullPath
+                    end
+                end
+                
+                -- Если файл не найден, пытаемся загрузить
+                for _, ext in ipairs(extensions) do
+                    local fullPath = soundPath .. ext
+                    local success, soundData = pcall(function()
+                        return game:HttpGet("https://github.com/f1nobe7650/Nebula/raw/refs/heads/main/Sounds/" .. actualFileName .. ext)
+                    end)
+                    
+                    if success and soundData and #soundData > 0 then
+                        writefile(fullPath, soundData)
+                        return fullPath
+                    end
+                end
+                
+                return nil
+            else
+                -- Звук из OnChangedCallback репозитория
+                local soundPath = "FentSounds/" .. soundName .. ".wav"
+                
+                if isfile(soundPath) then
+                    return soundPath
+                end
+                
+                local success, soundData = pcall(function()
+                    return game:HttpGet("https://github.com/OnChangedCallback/sounds/raw/main/main/" .. soundName .. ".wav")
+                end)
+                
+                if success and soundData then
+                    writefile(soundPath, soundData)
+                    return soundPath
+                else
+                    return nil
+                end
+            end
+        end
+        
+        function utility:playHitSound()
+            local uiLib = _G.FentanylUI
+            if not (uiLib and uiLib.Flags and uiLib.Flags["hit_sounds"]) then
+                return
+            end
+            
+            local volume = (uiLib.Flags["hit_sounds_volume"]) or 0.5
+            local pitch = (uiLib.Flags["hit_sounds_pitch"]) or 1.0
+            local soundSelection = (uiLib.Flags["hit_sounds_selection"]) or (availableSounds[1] or "1")
+            
+            local soundPath = self:downloadHitSound(soundSelection)
+            
+            if soundPath and isfile(soundPath) then
+                local sound = Instance.new("Sound")
+                sound.Volume = volume
+                sound.PlaybackSpeed = pitch
+                
+                -- Используем правильный метод для локальных файлов
+                local success, customAsset = pcall(function()
+                    if getsynasset then
+                        return getsynasset(soundPath)
+                    elseif getcustomasset then
+                        return getcustomasset(soundPath)
+                    else
+                        return "rbxassetid://6565367558" -- Fallback
+                    end
+                end)
+                
+                if success and customAsset then
+                    sound.SoundId = customAsset
+                    sound.Parent = workspace
+                    
+                    sound:Play()
+                    
+                    -- Удаляем звук после проигрывания
+                    sound.Ended:Connect(function()
+                        sound:Destroy()
+                    end)
+                end
+            end
         end
         
         TargetingFramework.utility = utility
@@ -1204,6 +1458,11 @@ do -- Ragebot Tab
                 -- Trigger HitChams when damage is detected
                 if K.Flags["hit_chams"] and hitInfo and _G.HitChamsFramework then
                     _G.HitChamsFramework:TriggerHitChams(hitInfo.player)
+                end
+                
+                -- Play HitSound when damage is detected
+                if K.Flags["hit_sounds"] and hitInfo and _G.TargetingFramework and _G.TargetingFramework.utility then
+                    _G.TargetingFramework.utility:playHitSound()
                 end
             end)
         end
@@ -3285,6 +3544,58 @@ do -- Visuals Tab
             Flag = "hit_chams_material",
             Callback = function(value)
                 K.Flags["hit_chams_material"] = value
+            end
+        })
+        
+        -- HitSounds Toggle
+        local _hitSoundsToggle = onTargetDamagedSection:Toggle({
+            Name = "HitSounds",
+            Default = false,
+            Flag = "hit_sounds",
+            Callback = function(value)
+                -- Создаем папку для звуков при включении
+                if value and _G.TargetingFramework and _G.TargetingFramework.utility then
+                    _G.TargetingFramework.utility:createSoundsFolder()
+                end
+            end
+        })
+        
+        -- HitSounds Selection Dropdown
+        local _hitSoundsSelectionDropdown = onTargetDamagedSection:Dropdown({
+            Name = "Sound",
+            Items = availableSounds,
+            Default = availableSounds[1] or "1",
+            Flag = "hit_sounds_selection",
+            Callback = function(value)
+                K.Flags["hit_sounds_selection"] = value
+            end
+        })
+        
+        -- HitSounds Volume Slider
+        local _hitSoundsVolumeSlider = onTargetDamagedSection:Slider({
+            Name = "Volume",
+            Min = 0,
+            Max = 10,
+            Default = 0.5,
+            Suffix = "",
+            Decimals = 0.01,
+            Flag = "hit_sounds_volume",
+            Callback = function(value)
+                K.Flags["hit_sounds_volume"] = value
+            end
+        })
+        
+        -- HitSounds Pitch Slider
+        local _hitSoundsPitchSlider = onTargetDamagedSection:Slider({
+            Name = "Pitch",
+            Min = 0.1,
+            Max = 3.0,
+            Default = 1.0,
+            Suffix = "",
+            Decimals = 0.01,
+            Flag = "hit_sounds_pitch",
+            Callback = function(value)
+                K.Flags["hit_sounds_pitch"] = value
             end
         })
         
