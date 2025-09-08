@@ -19,6 +19,7 @@ local v, w = string.lower, string.upper
 local x, y = string.sub, string.gsub
 local ipairs = ipairs
 local type, tostring = type, tostring
+local typeof = typeof
 local pcall, xpcall = pcall, xpcall
 local loadstring = loadstring
 local setmetatable = setmetatable
@@ -733,8 +734,7 @@ local L =
     }
 )
 local M = L:Page({Name = "Ragebot", Columns = 2})
--- Неиспользуемые вкладки (закомментированы для оптимизации)
--- local N = L:Page({Name = "Visuals", Columns = 2})
+local N = L:Page({Name = "Visuals", Columns = 2})
 -- local O = L:Page({Name = "Misc", Columns = 2})
 -- local P = L:Page({Name = "AntiAim", Columns = 2})
 
@@ -2311,6 +2311,238 @@ do -- Ragebot Tab
         _G.AutoArmorFramework = AutoArmorFramework
     end
 end -- End Ragebot Tab
+
+do -- Visuals Tab
+    do -- Target Section
+        local targetSection = N:Section({Name = "Target", Side = 1})
+        
+        -- Target Highlight структура данных
+        local bZ = {
+            hl = nil,           -- основной highlight объект
+            char_added_conn = nil,     -- соединение CharacterAdded
+            char_removing_conn = nil,  -- соединение CharacterRemoving
+            died_conn = nil,           -- соединение Died
+            bound_player = nil,        -- привязанный игрок
+            last_char = nil,           -- последний персонаж
+        }
+        
+        -- Функция создания highlight
+        local function c0()
+            local c1 = Instance.new("Highlight")
+            c1.Name = "RB_HL_32v"
+            c1.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            return c1
+        end
+        
+        -- Функция очистки highlight
+        local function c8()
+            if bZ.hl then
+                bZ.hl:Destroy()
+                bZ.hl = nil
+            end
+        end
+        
+        -- Функция применения highlight
+        local function ce(a3) -- a3 = character
+            if not a3 or not K.Flags or not K.Flags["target_highlight"] then
+                c8() -- cleanup
+                return
+            end
+            
+            -- Создаем highlight объект если его нет
+            if not bZ.hl then
+                bZ.hl = c0()
+            end
+            
+            -- Настраиваем основной highlight
+            local c1 = bZ.hl
+            c1.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            
+            -- Получаем цвета и transparency из флагов (как в других колорпикерах скрипта)
+            local fillColor = K.Flags["target_highlight_fill"]
+            local fillAlpha = K.Flags["target_highlight_fill_alpha"]
+            local outlineColor = K.Flags["target_highlight_outline"]
+            local outlineAlpha = K.Flags["target_highlight_outline_alpha"]
+            
+            -- Применяем Fill Color и Transparency
+            c1.FillColor = fillColor or z(255, 255, 0)
+            c1.FillTransparency = fillAlpha or 0.5
+            
+            -- Применяем Outline Color и Transparency
+            c1.OutlineColor = outlineColor or z(0, 0, 0)
+            c1.OutlineTransparency = outlineAlpha or 0.5
+            
+            c1.Adornee = a3
+            c1.Parent = a3
+            c1.Enabled = true
+            
+            bZ.last_char = a3
+        end
+        
+        -- Функция настройки Died connection
+        local function cg(a3) -- a3 = character
+            if not a3 then return end
+            
+            local aA = a3:FindFirstChildOfClass("Humanoid")
+            if aA then
+                if bZ.died_conn then
+                    bZ.died_conn:Disconnect()
+                end
+                
+                -- При смерти - убираем визуальный highlight
+                bZ.died_conn = aA.Died:Connect(function()
+                    c8() -- cleanup highlights
+                end)
+            end
+        end
+        
+        -- Ключевая функция привязки к игроку
+        local function cj(az) -- az = player
+            if not az then return end
+            
+            -- Отключаем старые соединения
+            if bZ.char_added_conn then
+                bZ.char_added_conn:Disconnect()
+            end
+            if bZ.char_removing_conn then
+                bZ.char_removing_conn:Disconnect()
+            end
+            
+            bZ.bound_player = az
+            
+            -- При удалении персонажа - очищаем highlight
+            bZ.char_removing_conn = az.CharacterRemoving:Connect(function(ck)
+                c8() -- cleanup highlights
+            end)
+            
+            -- ВОТ КЛЮЧЕВАЯ ЛОГИКА - при появлении нового персонажа:
+            bZ.char_added_conn = az.CharacterAdded:Connect(function(ck)
+                if not ck then return end
+                
+                b.Heartbeat:Wait()
+                
+                -- ПРОВЕРЯЕМ - является ли этот игрок текущей целью
+                local cl = _G.targeting_state and _G.targeting_state.current and
+                    (_G.targeting_state.current == az or 
+                     (_G.targeting_state.current.UserId and _G.targeting_state.current.UserId == az.UserId))
+                
+                -- Если да И включен target_highlight - ВОССТАНАВЛИВАЕМ highlight
+                if cl and K.Flags and K.Flags["target_highlight"] then
+                    ce(ck)  -- применяем highlight к новому персонажу
+                    cg(ck)  -- настраиваем died connection
+                end
+            end)
+            
+            -- Если у игрока уже есть персонаж - применяем сразу
+            if az.Character then
+                ce(az.Character)
+                cg(az.Character)
+            end
+        end
+        
+        -- Тогл для Target Highlight
+        local _targetHighlightToggle = targetSection:Toggle({
+            Name = "Highlight",
+            Default = false,
+            Flag = "target_highlight",
+            Callback = function(value)
+                if value then
+                    -- Если включили highlight и есть текущая цель
+                    if _G.TargetingFramework and _G.TargetingFramework._target and _G.TargetingFramework._target.info then
+                        local targetInfo = _G.TargetingFramework._target.info
+                        if targetInfo.player then
+                            cj(targetInfo.player)
+                        end
+                    end
+                else
+                    -- Если выключили highlight - очищаем все
+                    c8()
+                    if bZ.char_added_conn then
+                        bZ.char_added_conn:Disconnect()
+                        bZ.char_added_conn = nil
+                    end
+                    if bZ.char_removing_conn then
+                        bZ.char_removing_conn:Disconnect()
+                        bZ.char_removing_conn = nil
+                    end
+                    if bZ.died_conn then
+                        bZ.died_conn:Disconnect()
+                        bZ.died_conn = nil
+                    end
+                end
+            end
+        })
+        
+        -- Колорпикер для Fill Color с поддержкой transparency
+        _targetHighlightToggle:Colorpicker({
+            Name = "Fill Color",
+            Default = z(255, 255, 0),
+            Alpha = 0.5, -- Включаем слайдер transparency
+            Flag = "target_highlight_fill",
+            Callback = function(color, alpha)
+                -- Сохраняем цвет и alpha отдельно в флаги (как в других колорпикерах)
+                K.Flags["target_highlight_fill"] = color
+                K.Flags["target_highlight_fill_alpha"] = alpha
+                
+                -- Обновляем цвет и transparency если highlight активен
+                if bZ.hl and bZ.hl.Parent then
+                    bZ.hl.FillColor = color
+                    bZ.hl.FillTransparency = alpha or 0.5
+                end
+                -- Пересоздаем highlight с новыми настройками если есть текущая цель
+                if bZ.bound_player and bZ.bound_player.Character then
+                    ce(bZ.bound_player.Character)
+                end
+            end
+        })
+        
+        -- Колорпикер для Outline Color с поддержкой transparency
+        _targetHighlightToggle:Colorpicker({
+            Name = "Outline Color", 
+            Default = z(0, 0, 0),
+            Alpha = 0.5, -- Включаем слайдер transparency
+            Flag = "target_highlight_outline",
+            Callback = function(color, alpha)
+                -- Сохраняем цвет и alpha отдельно в флаги (как в других колорпикерах)
+                K.Flags["target_highlight_outline"] = color
+                K.Flags["target_highlight_outline_alpha"] = alpha
+                
+                -- Обновляем цвет и transparency если highlight активен
+                if bZ.hl and bZ.hl.Parent then
+                    bZ.hl.OutlineColor = color
+                    bZ.hl.OutlineTransparency = alpha or 0.5
+                end
+                -- Пересоздаем highlight с новыми настройками если есть текущая цель
+                if bZ.bound_player and bZ.bound_player.Character then
+                    ce(bZ.bound_player.Character)
+                end
+            end
+        })
+        
+        -- Подключаемся к изменениям цели
+        if _G.TargetingFramework then
+            _G.TargetingFramework:OnTargetUpdate(function(targetInfo)
+                if K.Flags and K.Flags["target_highlight"] then
+                    if targetInfo and targetInfo.player then
+                        cj(targetInfo.player)
+                    else
+                        c8()
+                    end
+                end
+            end)
+        end
+        
+        _G.TargetHighlight = {
+            bZ = bZ,
+            c0 = c0,
+            c8 = c8,
+            ce = ce,
+            cg = cg,
+            cj = cj
+        }
+    end
+end -- End Visuals Tab
+
 do -- Watermark & Keybinds
     local Q = K:Watermark("Fentanyl | " .. g.Name .. " | " .. os.date("%y.%m.%d") .. " | Premium")
     local R = K:KeybindList()
