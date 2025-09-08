@@ -128,6 +128,111 @@ do -- Targeting Framework
             return (Tool ~= "None" and Tool.Handle and Tool.Handle.Position) or cam.CFrame.Position
         end
         
+        -- Force Hit utility functions
+        function utility:isPlayerKO(player)
+            if not player or not player.Character then return false end
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            return humanoid and humanoid.Health <= 0
+        end
+        
+        function utility:isPlayerGrabbed(player)
+            if not player or not player.Character then return false end
+            -- Проверяем, схвачен ли игрок
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                return humanoid.PlatformStand or false
+            end
+            return false
+        end
+        
+        function utility:hasForceField(player)
+            if not player or not player.Character then return false end
+            return player.Character:FindFirstChildOfClass("ForceField") ~= nil
+        end
+        
+        function utility:performForceHit(targetPlayer)
+            if not targetPlayer or not targetPlayer.Character then 
+                return false 
+            end
+            
+            local character = g.Character
+            if not character then 
+                return false 
+            end
+            
+            local tool = character:FindFirstChildOfClass("Tool")
+            if not tool or not tool:FindFirstChild("Handle") then 
+                return false 
+            end
+            
+            local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local targetHead = targetPlayer.Character:FindFirstChild("Head")
+            if not targetHRP or not targetHead then 
+                return false 
+            end
+            
+            -- Получаем RemoteEvent оружия
+            local toolRemote = tool:FindFirstChild("RemoteEvent")
+            if not toolRemote then
+                print("[ForceHit] Tool RemoteEvent not found")
+                return false
+            end
+            
+            -- Получаем MainRemoteEvent
+            local replicatedStorage = game:GetService("ReplicatedStorage")
+            local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
+            if not mainRemotes then
+                print("[ForceHit] MainRemotes not found")
+                return false
+            end
+            
+            local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
+            if not mainRemoteEvent then
+                print("[ForceHit] MainRemoteEvent not found")
+                return false
+            end
+            
+            -- Выполняем последовательность выстрела как в оригинальном скрипте
+            local origin = tool.Handle.Position
+            print("[ForceHit] Shooting from", origin, "to", targetHRP.Position)
+            print("[ForceHit] Tool:", tool.Name)
+            
+            -- 1. Сначала отправляем "Shoot" через RemoteEvent оружия
+            local success1 = pcall(function()
+                toolRemote:FireServer("Shoot")
+            end)
+            if not success1 then
+                print("[ForceHit] Failed to send Shoot command")
+            end
+            
+            -- 2. Отправляем основной выстрел через MainRemoteEvent
+            local success2 = pcall(function()
+                mainRemoteEvent:FireServer(
+                    "ShootGun",
+                    tool.Handle,
+                    origin,
+                    targetHRP.Position,
+                    targetHead,
+                    B(0, 0, -1) -- Vector3.zAxis как в оригинале
+                )
+            end)
+            if not success2 then
+                print("[ForceHit] Failed to send ShootGun command")
+            else
+                print("[ForceHit] ShootGun command sent successfully")
+            end
+            
+            -- 3. Завершаем выстрел
+            local success3 = pcall(function()
+                toolRemote:FireServer()
+            end)
+            if not success3 then
+                print("[ForceHit] Failed to send final FireServer command")
+            end
+            
+            return success2
+        end
+        
         TargetingFramework.utility = utility
     end
     
@@ -757,6 +862,25 @@ do -- Ragebot Tab
         })
     end
     
+    do -- Exploits Section
+        local exploitsSection = M:Section({Name = "Exploits", Side = 2})
+        
+        local _forceHitToggle = exploitsSection:Toggle({
+            Name = "Force Hit (Magic Bullets)",
+            Default = false,
+            Flag = "ForceHitEnabled",
+            Callback = function(enabled)
+                if _G.ForceHitFramework then
+                    if enabled then
+                        _G.ForceHitFramework.start()
+                    else
+                        _G.ForceHitFramework.stop()
+                    end
+                end
+            end
+        })
+    end
+    
     do -- Desync Section
         local desyncSection = M:Section({Name = "Desync", Side = 2})
         local _autoArmorToggle = desyncSection:Toggle({
@@ -912,6 +1036,108 @@ do -- Ragebot Tab
         end)
         
         _G.AimbotFramework = AimbotFramework
+    end
+    
+    do -- Force Hit Framework
+        local ForceHitFramework = {
+            enabled = false,
+            connection = nil,
+            shootDelay = 0.1, -- Задержка между выстрелами
+            lastShotTime = 0
+        }
+        
+        function ForceHitFramework.start()
+            if ForceHitFramework.connection then
+                return
+            end
+            
+            ForceHitFramework.enabled = true
+            print("[ForceHit] Framework started")
+            
+            ForceHitFramework.connection = E.new_connection(b.Heartbeat, function()
+                if not ForceHitFramework.enabled then
+                    return
+                end
+                
+                -- Проверяем, есть ли текущая цель
+                if not _G.targeting_state or not _G.targeting_state.current then
+                    return
+                end
+                
+                local currentTarget = _G.targeting_state.current
+                if not currentTarget or not currentTarget.Character then
+                    return
+                end
+                
+                -- Проверяем задержку между выстрелами
+                local now = os.clock()
+                if now - ForceHitFramework.lastShotTime < ForceHitFramework.shootDelay then
+                    return
+                end
+                
+                -- Проверяем, есть ли у нас оружие
+                local character = g.Character
+                if not character then
+                    return
+                end
+                
+                local tool = character:FindFirstChildOfClass("Tool")
+                if not tool or not tool:FindFirstChild("Handle") then
+                    return
+                end
+                
+                -- Проверяем состояние цели
+                local utility = _G.TargetingFramework and _G.TargetingFramework.utility
+                if not utility then
+                    return
+                end
+                
+                local isKO = utility:isPlayerKO(currentTarget)
+                local _isGrabbed = utility:isPlayerGrabbed(currentTarget)
+                local hasFF = utility:hasForceField(currentTarget)
+                
+                -- Если цель в невалидном состоянии, пропускаем
+                if isKO or hasFF then
+                    return
+                end
+                
+                -- Проверяем дистанцию
+                local targetHRP = currentTarget.Character:FindFirstChild("HumanoidRootPart")
+                if not targetHRP then
+                    return
+                end
+                
+                local myHRP = character:FindFirstChild("HumanoidRootPart")
+                if not myHRP then
+                    return
+                end
+                
+                local distance = (myHRP.Position - targetHRP.Position).Magnitude
+                local maxRange = 5000 -- Максимальная дистанция для Force Hit
+                
+                if distance > maxRange then
+                    return
+                end
+                
+                -- Выполняем Force Hit
+                local success = utility.performForceHit(utility, currentTarget)
+                if success then
+                    ForceHitFramework.lastShotTime = now
+                    print("[ForceHit] Shot fired at", currentTarget.Name)
+                end
+            end)
+        end
+        
+        function ForceHitFramework.stop()
+            ForceHitFramework.enabled = false
+            if ForceHitFramework.connection then
+                ForceHitFramework.connection:Disconnect()
+                ForceHitFramework.connection = nil
+            end
+            print("[ForceHit] Framework stopped")
+        end
+        
+        _G.ForceHitFramework = ForceHitFramework
     end
     
     do -- Infinity Range Framework
