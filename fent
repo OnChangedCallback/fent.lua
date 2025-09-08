@@ -137,6 +137,24 @@ do -- Targeting Framework
         -- Force Hit utility functions
         function utility:isPlayerKO(player)
             if not player or not player.Character then return false end
+            
+            -- Проверяем K.O статус через BodyEffects
+            local success, isKO = pcall(function()
+                local playerInWorkspace = workspace.Players:FindFirstChild(player.Name)
+                if playerInWorkspace and playerInWorkspace:FindFirstChild("BodyEffects") then
+                    local koEffect = playerInWorkspace.BodyEffects:FindFirstChild("K.O")
+                    if koEffect and koEffect:FindFirstChild("Value") then
+                        return koEffect.Value.Value == true
+                    end
+                end
+                return false
+            end)
+            
+            if success then
+                return isKO
+            end
+            
+            -- Fallback к проверке здоровья если BodyEffects недоступны
             local humanoid = player.Character:FindFirstChild("Humanoid")
             return humanoid and humanoid.Health <= 0
         end
@@ -159,6 +177,11 @@ do -- Targeting Framework
         function utility:performForceHit(targetPlayer)
             if not targetPlayer or not targetPlayer.Character then 
                 return false 
+            end
+            
+            -- Проверяем K.O статус цели перед выстрелом
+            if self:isPlayerKO(targetPlayer) then
+                return false
             end
             
             local character = g.Character
@@ -230,6 +253,104 @@ do -- Targeting Framework
             end
             
             return success2
+        end
+        
+        -- HitChams utility functions
+        function utility:createHitChams(player)
+            if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+                return
+            end
+            
+            -- Получаем настройки цвета, прозрачности и материала из UI
+            local uiLib = _G.FentanylUI
+            local chamsColor = (uiLib and uiLib.Flags and uiLib.Flags["hit_chams_color"]) or z(255, 0, 0)
+            local chamsAlpha = (uiLib and uiLib.Flags and uiLib.Flags["hit_chams_alpha"]) or 0.0
+            local chamsMaterial = (uiLib and uiLib.Flags and uiLib.Flags["hit_chams_material"]) or "Neon"
+            
+            player.Character.Archivable = true
+            local cloned = player.Character:Clone()
+            cloned.Name = "HitChams_Clone"
+            
+            local bodyParts = {
+                "Head", "UpperTorso", "LowerTorso",
+                "LeftUpperArm", "LeftLowerArm", "LeftHand",
+                "RightUpperArm", "RightLowerArm", "RightHand",
+                "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+                "RightUpperLeg", "RightLowerLeg", "RightFoot"
+            }
+            
+            -- Удаляем ненужные части
+            for _, part in ipairs(cloned:GetChildren()) do
+                if part:IsA("BasePart") then
+                    local partValid = false
+                    for _, validPart in ipairs(bodyParts) do
+                        if part.Name == validPart then
+                            partValid = true
+                            break
+                        end
+                    end
+                    
+                    if not partValid then
+                        part:Destroy()
+                    end
+                elseif part:IsA("Accessory") or part:IsA("Tool") or part.Name == "face" or 
+                       part:IsA("Shirt") or part:IsA("Pants") or part:IsA("Hat") then
+                    part:Destroy()
+                end
+            end
+            
+            -- Удаляем Humanoid
+            if cloned:FindFirstChild("Humanoid") then
+                cloned.Humanoid:Destroy()
+            end
+            
+            -- Настраиваем части тела с пользовательскими настройками
+            for _, bodyPart in ipairs(cloned:GetChildren()) do
+                if bodyPart:IsA("BasePart") then
+                    bodyPart.CanCollide = false
+                    bodyPart.Anchored = true
+                    bodyPart.Transparency = chamsAlpha
+                    bodyPart.Color = chamsColor
+                    bodyPart.Material = Enum.Material[chamsMaterial]
+                end
+            end
+            
+            -- Настраиваем голову отдельно с пользовательскими настройками
+            if cloned:FindFirstChild("Head") then
+                local head = cloned.Head
+                head.Transparency = chamsAlpha
+                head.Color = chamsColor
+                head.Material = Enum.Material[chamsMaterial]
+                
+                if head:FindFirstChild("face") then
+                    head.face:Destroy()
+                end
+            end
+            
+            cloned.Parent = workspace
+            
+            -- Создаем tween для исчезновения
+            local tweenInfo = TweenInfo.new(
+                2, -- duration
+                Enum.EasingStyle.Sine,
+                Enum.EasingDirection.InOut,
+                0,
+                true
+            )
+            
+            for _, bodyPart in ipairs(cloned:GetChildren()) do
+                if bodyPart:IsA("BasePart") then
+                    local tween = d:Create(bodyPart, tweenInfo, { Transparency = 1 })
+                    tween:Play()
+                end
+            end
+            
+            -- Удаляем клон через заданное время
+            task.delay(2, function()
+                if cloned and cloned.Parent then
+                    cloned:Destroy()
+                end
+            end)
         end
         
         TargetingFramework.utility = utility
@@ -1078,6 +1199,11 @@ do -- Ragebot Tab
                 if K.Flags["NotifyOnDamage"] and hitInfo then
                     local damageText = t("%.1f damage to %s", hitInfo.damage, hitInfo.player.Name)
                     K:Notification(damageText, 2, z(255, 100, 100))
+                end
+                
+                -- Trigger HitChams when damage is detected
+                if K.Flags["hit_chams"] and hitInfo and _G.HitChamsFramework then
+                    _G.HitChamsFramework:TriggerHitChams(hitInfo.player)
                 end
             end)
         end
@@ -2758,6 +2884,25 @@ do -- Ragebot Tab
         
         _G.SnaplineFramework = SnaplineFramework
     end
+    
+    do -- HitChams Framework
+        local HitChamsFramework = {
+            enabled = false
+        }
+        
+        function HitChamsFramework:SetEnabled(value)
+            self.enabled = value
+        end
+        
+        function HitChamsFramework:TriggerHitChams(player)
+            if not self.enabled then return end
+            if _G.TargetingFramework and _G.TargetingFramework.utility then
+                _G.TargetingFramework.utility:createHitChams(player)
+            end
+        end
+        
+        _G.HitChamsFramework = HitChamsFramework
+    end
 end -- End Ragebot Tab
 
 do -- Visuals Tab
@@ -3099,6 +3244,47 @@ do -- Visuals Tab
                     _G.SnaplineFramework:SetOutlineColor(color)
                     _G.SnaplineFramework:SetOutlineTransparency(alpha or 1.0)
                 end
+            end
+        })
+        
+    end
+    
+    do -- OnTargetDamaged Section
+        local onTargetDamagedSection = N:Section({Name = "OnTargetDamaged", Side = 1})
+        
+        -- Chams Toggle
+        local _chamsToggle = onTargetDamagedSection:Toggle({
+            Name = "Chams",
+            Default = false,
+            Flag = "hit_chams",
+            Callback = function(value)
+                if _G.HitChamsFramework then
+                    _G.HitChamsFramework:SetEnabled(value)
+                end
+            end
+        })
+        
+        -- Chams Color Picker
+        _chamsToggle:Colorpicker({
+            Name = "Color",
+            Default = z(255, 0, 0),
+            Alpha = 0.0,
+            Flag = "hit_chams_color",
+            Callback = function(color, alpha)
+                -- Сохраняем цвет и прозрачность в флаги
+                K.Flags["hit_chams_color"] = color
+                K.Flags["hit_chams_alpha"] = alpha
+            end
+        })
+        
+        -- Chams Material Dropdown
+        local _chamsMaterialDropdown = onTargetDamagedSection:Dropdown({
+            Name = "Material",
+            Items = {"Neon", "ForceField", "Glass", "SmoothPlastic", "Plastic", "Metal"},
+            Default = "Neon",
+            Flag = "hit_chams_material",
+            Callback = function(value)
+                K.Flags["hit_chams_material"] = value
             end
         })
         
