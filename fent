@@ -52,6 +52,9 @@ local wait = wait
 local fireclickdetector = fireclickdetector
 local getconnections = getconnections
 local debug = debug
+-- Circle rendering variables
+local tick = tick
+local Drawing = Drawing
 local E = {}
 local F = {}
 do
@@ -228,6 +231,37 @@ do -- Targeting Framework
         end
         
         TargetingFramework.utility = utility
+    end
+    
+    do -- Circle Utility Functions
+        local circle_utility = {}
+        
+        function circle_utility.lerp(a, b, t)
+            return a + (b - a) * t
+        end
+        
+        function circle_utility.lerp_color(a, b, t)
+            return z(
+                circle_utility.lerp(a.R * 255, b.R * 255, t),
+                circle_utility.lerp(a.G * 255, b.G * 255, t),
+                circle_utility.lerp(a.B * 255, b.B * 255, t)
+            )
+        end
+        
+        function circle_utility.custom_gradient(t, time, c1, c2, c3, c4, speed)
+            local tt = (t + (time * speed)) % 1
+            if tt < 0.25 then
+                return circle_utility.lerp_color(c1, c2, tt / 0.25)
+            elseif tt < 0.5 then
+                return circle_utility.lerp_color(c2, c3, (tt - 0.25) / 0.25)
+            elseif tt < 0.75 then
+                return circle_utility.lerp_color(c3, c4, (tt - 0.5) / 0.25)
+            else
+                return circle_utility.lerp_color(c4, c1, (tt - 0.75) / 0.25)
+            end
+        end
+        
+        TargetingFramework.circle_utility = circle_utility
     end
     
     do -- Core Framework Functions
@@ -2310,6 +2344,162 @@ do -- Ragebot Tab
         
         _G.AutoArmorFramework = AutoArmorFramework
     end
+    
+    do -- Circle Framework
+        local CircleFramework = {
+            enabled = false,
+            c1 = z(128, 18, 255),
+            c2 = z(255, 0, 128),
+            c3 = z(0, 200, 255),
+            c4 = z(255, 255, 0),
+            speed = 1.0,
+            radius = 2,
+            sides = 48,
+            thickness = 2.5,
+            line_trs = 1.0,
+            y_offset = 0,
+            drawings = {},
+            conn = nil,
+            current_target = nil
+        }
+        
+        local function ensure_lines()
+            if #CircleFramework.drawings == CircleFramework.sides then return end
+            for _, ln in ipairs(CircleFramework.drawings) do 
+                pcall(function() ln:Remove() end) 
+            end
+            CircleFramework.drawings = {}
+            for _ = 1, CircleFramework.sides do
+                local ln = Drawing.new("Line")
+                ln.ZIndex = 2
+                ln.Thickness = CircleFramework.thickness
+                ln.Visible = false
+                p(CircleFramework.drawings, ln)
+            end
+        end
+        
+        local function set_visible_all(v)
+            for _, ln in ipairs(CircleFramework.drawings) do 
+                ln.Visible = v 
+            end
+        end
+        
+        local function cleanup_circle()
+            if CircleFramework.conn then 
+                CircleFramework.conn:Disconnect()
+                CircleFramework.conn = nil 
+            end
+            for _, ln in ipairs(CircleFramework.drawings) do 
+                pcall(function() ln:Remove() end) 
+            end
+            CircleFramework.drawings = {}
+        end
+        
+        local function update_circle()
+            if not CircleFramework.enabled then
+                cleanup_circle()
+                return
+            end
+            
+            -- Получаем текущую цель из TargetingFramework
+            local target_info = _G.TargetingFramework and _G.TargetingFramework._target and _G.TargetingFramework._target.info
+            if not target_info or not target_info.player then
+                set_visible_all(false)
+                return
+            end
+            
+            local target_player = target_info.player
+            local char = target_player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            
+            if not (char and root and hum and hum.Health > 0) then
+                set_visible_all(false)
+                return
+            end
+            
+            ensure_lines()
+            
+            local pos = root.Position + B(0, CircleFramework.y_offset, 0)
+            local root2d, onScreen = cam:WorldToViewportPoint(root.Position)
+            if (not onScreen) or root2d.Z <= 0 then
+                set_visible_all(false)
+                return
+            end
+            
+            local timeNow = tick()
+            local tau = math.pi * 2
+            
+            for i = 1, CircleFramework.sides do
+                local ln = CircleFramework.drawings[i]
+                local f1 = (i / CircleFramework.sides)
+                local a = f1 * tau
+                local b = ((i % CircleFramework.sides) + 1) / CircleFramework.sides * tau
+                
+                local p1 = pos + B(o(a), 0, n(a)) * CircleFramework.radius
+                local p2 = pos + B(o(b), 0, n(b)) * CircleFramework.radius
+                
+                local a2 = cam:WorldToViewportPoint(p1)
+                local b2 = cam:WorldToViewportPoint(p2)
+                
+                local col = _G.TargetingFramework.circle_utility.custom_gradient(
+                    f1, timeNow, 
+                    CircleFramework.c1, CircleFramework.c2, 
+                    CircleFramework.c3, CircleFramework.c4, 
+                    CircleFramework.speed
+                )
+                
+                ln.From = Vector2.new(a2.X, a2.Y)
+                ln.To = Vector2.new(b2.X, b2.Y)
+                ln.Color = col
+                ln.Transparency = CircleFramework.line_trs
+                ln.Thickness = CircleFramework.thickness
+                ln.Visible = true
+            end
+        end
+        
+        function CircleFramework:SetEnabled(v)
+            self.enabled = v
+            if v then
+                if not self.conn then
+                    self.conn = E.new_connection(b.RenderStepped, update_circle)
+                end
+            else
+                set_visible_all(false)
+                cleanup_circle()
+            end
+        end
+        
+        function CircleFramework:SetRadius(r) 
+            self.radius = r 
+        end
+        
+        function CircleFramework:SetSides(n) 
+            self.sides = math.clamp(n, 8, 256)
+            ensure_lines() 
+        end
+        
+        function CircleFramework:SetWidth(w) 
+            self.thickness = w 
+        end
+        
+        function CircleFramework:SetAlpha(t) 
+            self.line_trs = t 
+        end
+        
+        function CircleFramework:SetColors(c1, c2, c3, c4) 
+            self.c1 = c1 or self.c1
+            self.c2 = c2 or self.c2
+            self.c3 = c3 or self.c3
+            self.c4 = c4 or self.c4
+        end
+        
+        function CircleFramework:SetYOffset(y) 
+            self.y_offset = y 
+        end
+        
+        _G.CircleFramework = CircleFramework
+    end
 end -- End Ragebot Tab
 
 do -- Visuals Tab
@@ -2540,6 +2730,67 @@ do -- Visuals Tab
             cg = cg,
             cj = cj
         }
+        
+        -- Circle Toggle
+        local _targetCircleToggle = targetSection:Toggle({
+            Name = "Circle",
+            Default = false,
+            Flag = "target_circle",
+            Callback = function(value)
+                if _G.CircleFramework then
+                    _G.CircleFramework:SetEnabled(value)
+                end
+            end
+        })
+        
+        -- Circle Color 1
+        _targetCircleToggle:Colorpicker({
+            Name = "Color 1",
+            Default = z(128, 18, 255),
+            Flag = "circle_color1",
+            Callback = function(color)
+                if _G.CircleFramework then
+                    _G.CircleFramework.c1 = color
+                end
+            end
+        })
+        
+        -- Circle Color 2
+        _targetCircleToggle:Colorpicker({
+            Name = "Color 2",
+            Default = z(255, 0, 128),
+            Flag = "circle_color2",
+            Callback = function(color)
+                if _G.CircleFramework then
+                    _G.CircleFramework.c2 = color
+                end
+            end
+        })
+        
+        -- Circle Color 3
+        _targetCircleToggle:Colorpicker({
+            Name = "Color 3",
+            Default = z(0, 200, 255),
+            Flag = "circle_color3",
+            Callback = function(color)
+                if _G.CircleFramework then
+                    _G.CircleFramework.c3 = color
+                end
+            end
+        })
+        
+        -- Circle Color 4
+        _targetCircleToggle:Colorpicker({
+            Name = "Color 4",
+            Default = z(255, 255, 0),
+            Flag = "circle_color4",
+            Callback = function(color)
+                if _G.CircleFramework then
+                    _G.CircleFramework.c4 = color
+                end
+            end
+        })
+        
     end
 end -- End Visuals Tab
 
