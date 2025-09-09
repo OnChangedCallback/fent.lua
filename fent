@@ -4583,6 +4583,231 @@ do -- Visuals Tab
         -- Сохраняем в глобальную область для доступа из других частей кода
         _G.HaloUtility = halo_utility
         
+        -- Snow система
+        local snow_state = {
+            enabled = false,
+            color = z(0, 0.6, 1), -- Голубой цвет по умолчанию
+            part = nil,
+            particle_emitter = nil,
+            weld_constraint = nil,
+            cleanup_connections = {}
+        }
+        
+        local snow_utility = {}
+        
+        function snow_utility:cleanup()
+            -- Удаляем part и particle emitter
+            if snow_state.part then
+                snow_state.part:Destroy()
+                snow_state.part = nil
+            end
+            
+            if snow_state.particle_emitter then
+                snow_state.particle_emitter = nil
+            end
+            
+            if snow_state.weld_constraint then
+                snow_state.weld_constraint:Destroy()
+                snow_state.weld_constraint = nil
+            end
+            
+            -- Отключаем все подключения
+            for _, connection in pairs(snow_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            snow_state.cleanup_connections = {}
+        end
+        
+        function snow_utility:createSnow()
+            local localPlayer = g
+            if not localPlayer.Character then
+                return
+            end
+            
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                return
+            end
+            
+            -- Очищаем предыдущий снег
+            self:cleanup()
+            
+            -- Создаем Part для снега
+            local snowPart = Instance.new("Part")
+            snowPart.Name = "SnowPart"
+            snowPart.Anchored = false
+            snowPart.AssemblyAngularVelocity = B(0, 0, 0)
+            snowPart.AssemblyLinearVelocity = B(0, 0, 0)
+            snowPart.BackSurface = Enum.SurfaceType.Smooth
+            snowPart.BottomSurface = Enum.SurfaceType.Smooth
+            snowPart.BrickColor = BrickColor.new("Medium stone grey")
+            snowPart.CFrame = C(hrp.Position.X, hrp.Position.Y + 75, hrp.Position.Z)
+            snowPart.CanCollide = false
+            snowPart.CanQuery = false
+            snowPart.CanTouch = false
+            snowPart.CastShadow = false
+            snowPart.Color = z(0.639216, 0.635294, 0.647059)
+            snowPart.FrontSurface = Enum.SurfaceType.Smooth
+            snowPart.LeftSurface = Enum.SurfaceType.Smooth
+            snowPart.Locked = false
+            snowPart.Massless = true
+            snowPart.Material = Enum.Material.Plastic
+            snowPart.MaterialVariant = ""
+            snowPart.Orientation = B(0, 0, 0)
+            snowPart.PivotOffset = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            snowPart.Position = B(hrp.Position.X, hrp.Position.Y + 75, hrp.Position.Z)
+            snowPart.Reflectance = 0
+            snowPart.RightSurface = Enum.SurfaceType.Smooth
+            snowPart.RootPriority = 0
+            snowPart.Rotation = B(0, 0, 0)
+            snowPart.Size = B(200, 150, 200)
+            snowPart.TopSurface = Enum.SurfaceType.Smooth
+            snowPart.Transparency = 1
+            snowPart.Parent = workspace
+            snow_state.part = snowPart
+            
+            -- Создаем WeldConstraint для привязки к персонажу
+            local weldConstraint = Instance.new("WeldConstraint")
+            weldConstraint.Part0 = hrp
+            weldConstraint.Part1 = snowPart
+            weldConstraint.Parent = snowPart
+            snow_state.weld_constraint = weldConstraint
+            
+            -- Создаем ParticleEmitter для снега
+            local snowEmitter = Instance.new("ParticleEmitter")
+            snowEmitter.Name = "SnowEmitter"
+            snowEmitter.Acceleration = B(0, 0, 0)
+            snowEmitter.Brightness = 1.5
+            snowEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, snow_state.color),
+                ColorSequenceKeypoint.new(1, snow_state.color)
+            }
+            snowEmitter.Drag = 0
+            snowEmitter.EmissionDirection = Enum.NormalId.Top
+            snowEmitter.Enabled = true
+            snowEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            snowEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            snowEmitter.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            snowEmitter.FlipbookStartRandom = false
+            snowEmitter.Lifetime = NumberRange.new(2, 3)
+            snowEmitter.LightEmission = 1
+            snowEmitter.LightInfluence = 0
+            snowEmitter.LockedToPart = false
+            snowEmitter.Orientation = Enum.ParticleOrientation.VelocityParallel
+            snowEmitter.Rate = 1000
+            snowEmitter.RotSpeed = NumberRange.new(0, 0)
+            snowEmitter.Rotation = NumberRange.new(90, 90)
+            snowEmitter.Shape = Enum.ParticleEmitterShape.Box
+            snowEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward
+            snowEmitter.ShapePartial = 1
+            snowEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            snowEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0.7)}
+            snowEmitter.Speed = NumberRange.new(5, 5)
+            snowEmitter.SpreadAngle = Vector2.new(0, 0)
+            snowEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            snowEmitter.Texture = "rbxassetid://14197923174"
+            snowEmitter.TimeScale = 1
+            snowEmitter.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.498132, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            }
+            snowEmitter.VelocityInheritance = 0
+            snowEmitter.ZOffset = 1
+            snowEmitter.Parent = snowPart
+            snow_state.particle_emitter = snowEmitter
+            
+            -- Подключаемся к событиям персонажа
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function snow_utility:setupCharacterEvents(localPlayer)
+            -- Подключаемся к событию смерти персонажа
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local diedConnection = humanoid.Died:Connect(function()
+                    -- Очищаем только визуальные элементы
+                    if snow_state.part then
+                        snow_state.part:Destroy()
+                        snow_state.part = nil
+                    end
+                    if snow_state.particle_emitter then
+                        snow_state.particle_emitter = nil
+                    end
+                    if snow_state.weld_constraint then
+                        snow_state.weld_constraint:Destroy()
+                        snow_state.weld_constraint = nil
+                    end
+                end)
+                table.insert(snow_state.cleanup_connections, diedConnection)
+            end
+        end
+        
+        function snow_utility:setEnabled(enabled)
+            snow_state.enabled = enabled
+            
+            if enabled then
+                self:createSnow()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function snow_utility:updateColor(newColor)
+            snow_state.color = newColor
+            
+            -- Обновляем цвет существующего снега
+            if snow_state.particle_emitter then
+                snow_state.particle_emitter.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, newColor),
+                    ColorSequenceKeypoint.new(1, newColor)
+                }
+            end
+        end
+        
+        -- Snow Toggle
+        local snowToggle = stuffSection:Toggle({
+            Name = "Snow",
+            Default = false,
+            Flag = "snow_enabled",
+            Callback = function(value)
+                snow_utility:setEnabled(value)
+            end
+        })
+        
+        -- Snow Colorpicker
+        snowToggle:Colorpicker({
+            Name = "Snow Color",
+            Default = z(0, 0.6, 1), -- Голубой цвет по умолчанию
+            Flag = "snow_color",
+            Callback = function(value)
+                snow_utility:updateColor(value)
+            end
+        })
+        
+        -- Глобальное подключение к событию CharacterAdded для снега
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if snow_state.enabled then
+                snow_utility:createSnow()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if snow_state.enabled then
+                    snow_utility:createSnow()
+                end
+            end)
+        end
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.SnowUtility = snow_utility
+        
     end
 end -- End Visuals Tab
 
