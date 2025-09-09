@@ -4371,6 +4371,182 @@ do -- Visuals Tab
         -- Сохраняем в глобальную область для доступа из других частей кода
         _G.AuraUtility = aura_utility
         
+        -- Halo (Нимб) система
+        local halo_state = {
+            enabled = false,
+            color = z(255, 225, 0), -- Золотой цвет по умолчанию
+            attachment = nil,
+            particle_emitter = nil,
+            cleanup_connections = {}
+        }
+        
+        local halo_utility = {}
+        
+        function halo_utility:cleanup()
+            -- Удаляем attachment и particle emitter
+            if halo_state.attachment then
+                halo_state.attachment:Destroy()
+                halo_state.attachment = nil
+            end
+            
+            if halo_state.particle_emitter then
+                halo_state.particle_emitter:Destroy()
+                halo_state.particle_emitter = nil
+            end
+            
+            -- Отключаем все подключения
+            for _, connection in pairs(halo_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            halo_state.cleanup_connections = {}
+        end
+        
+        function halo_utility:createHalo()
+            local localPlayer = g
+            if not localPlayer.Character then
+                return
+            end
+            
+            local head = localPlayer.Character:FindFirstChild("Head")
+            if not head then
+                return
+            end
+            
+            -- Очищаем предыдущий нимб
+            self:cleanup()
+            
+            -- Создаем Attachment для нимба
+            local haloAttachment = Instance.new("Attachment")
+            haloAttachment.Name = "HaloAttachment"
+            haloAttachment.Position = B(0, 1.4, 0) -- Позиция над головой
+            haloAttachment.Orientation = B(0, 0, 7) -- Наклон на 6 градусов
+            haloAttachment.Parent = head
+            halo_state.attachment = haloAttachment
+            
+            -- Создаем ParticleEmitter для нимба
+            local haloEmitter = Instance.new("ParticleEmitter")
+            haloEmitter.Name = "Halo"
+            haloEmitter.Acceleration = B(0, 0, 0)
+            haloEmitter.Brightness = 1
+            haloEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, halo_state.color),
+                ColorSequenceKeypoint.new(1, halo_state.color)
+            }
+            haloEmitter.Drag = 0
+            haloEmitter.EmissionDirection = Enum.NormalId.Top
+            haloEmitter.Enabled = true
+            haloEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            haloEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            haloEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            haloEmitter.FlipbookStartRandom = false
+            haloEmitter.Lifetime = NumberRange.new(1.5, 1.5)
+            haloEmitter.LightEmission = 1
+            haloEmitter.LightInfluence = 0
+            haloEmitter.LockedToPart = true
+            haloEmitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            haloEmitter.Rate = 3
+            haloEmitter.RotSpeed = NumberRange.new(-360, -360)
+            haloEmitter.Rotation = NumberRange.new(-360, 360)
+            haloEmitter.Shape = Enum.ParticleEmitterShape.Box
+            haloEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            haloEmitter.ShapePartial = 1
+            haloEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            haloEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 2.6), NumberSequenceKeypoint.new(1, 2.6)}
+            haloEmitter.Speed = NumberRange.new(0.001, 0.001)
+            haloEmitter.SpreadAngle = Vector2.new(3, 2)
+            haloEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.01), NumberSequenceKeypoint.new(1, 0.01)}
+            haloEmitter.Texture = "rbxassetid://7185003058"
+            haloEmitter.TimeScale = 1
+            haloEmitter.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.293, 0),
+                NumberSequenceKeypoint.new(0.497, 0),
+                NumberSequenceKeypoint.new(0.701, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            }
+            haloEmitter.VelocityInheritance = 0
+            haloEmitter.ZOffset = 0
+            haloEmitter.Parent = haloAttachment
+            halo_state.particle_emitter = haloEmitter
+            
+            -- Подключаемся к событиям персонажа
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function halo_utility:setupCharacterEvents(localPlayer)
+            -- Подключаемся к событию смерти персонажа
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local diedConnection = humanoid.Died:Connect(function()
+                    self:cleanup()
+                end)
+                table.insert(halo_state.cleanup_connections, diedConnection)
+            end
+            
+            -- Подключаемся к событию удаления персонажа
+            local charRemovingConnection = localPlayer.CharacterRemoving:Connect(function()
+                self:cleanup()
+            end)
+            table.insert(halo_state.cleanup_connections, charRemovingConnection)
+            
+            -- Подключаемся к событию появления нового персонажа
+            local charAddedConnection = localPlayer.CharacterAdded:Connect(function()
+                if halo_state.enabled then
+                    -- Ждем пока персонаж полностью загрузится
+                    wait(0.1)
+                    self:createHalo()
+                end
+            end)
+            table.insert(halo_state.cleanup_connections, charAddedConnection)
+        end
+        
+        function halo_utility:setEnabled(enabled)
+            halo_state.enabled = enabled
+            
+            if enabled then
+                self:createHalo()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function halo_utility:updateColor(newColor)
+            halo_state.color = newColor
+            
+            -- Обновляем цвет существующего нимба
+            if halo_state.particle_emitter then
+                halo_state.particle_emitter.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, newColor),
+                    ColorSequenceKeypoint.new(1, newColor)
+                }
+            end
+        end
+        
+        -- Halo Toggle
+        local haloToggle = stuffSection:Toggle({
+            Name = "Halo",
+            Default = false,
+            Flag = "halo_enabled",
+            Callback = function(value)
+                halo_utility:setEnabled(value)
+            end
+        })
+        
+        -- Halo Colorpicker
+        haloToggle:Colorpicker({
+            Name = "Halo Color",
+            Default = z(255, 225, 0), -- Золотой цвет по умолчанию
+            Flag = "halo_color",
+            Callback = function(value)
+                halo_utility:updateColor(value)
+            end
+        })
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.HaloUtility = halo_utility
+        
     end
 end -- End Visuals Tab
 
