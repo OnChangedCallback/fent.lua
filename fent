@@ -3600,6 +3600,233 @@ do -- Visuals Tab
         })
         
     end
+    
+    do -- Stuff Section
+        local stuffSection = N:Section({Name = "Stuff", Side = 2})
+        
+        -- Aura utility functions
+        local aura_utility = {}
+        local aura_state = {
+            enabled = false,
+            attachment = nil,
+            particle_emitter = nil,
+            flash_emitter = nil,
+            cleanup_connections = {}
+        }
+        
+        function aura_utility:cleanup()
+            -- Отключаем все соединения
+            for _, connection in pairs(aura_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            aura_state.cleanup_connections = {}
+            
+            -- Удаляем particle emitters
+            if aura_state.particle_emitter then
+                aura_state.particle_emitter:Destroy()
+                aura_state.particle_emitter = nil
+            end
+            
+            if aura_state.flash_emitter then
+                aura_state.flash_emitter:Destroy()
+                aura_state.flash_emitter = nil
+            end
+            
+            -- Удаляем attachment
+            if aura_state.attachment then
+                aura_state.attachment:Destroy()
+                aura_state.attachment = nil
+            end
+        end
+        
+        function aura_utility:createAura()
+            local localPlayer = g
+            if not localPlayer or not localPlayer.Character then
+                return
+            end
+            
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                return
+            end
+            
+            -- Очищаем предыдущую ауру
+            self:cleanup()
+            
+            -- Создаем RootAttachment
+            local rootAttachment = Instance.new("Attachment")
+            rootAttachment.Name = "RootAttachment"
+            rootAttachment.Axis = B(1, 0, 0)
+            rootAttachment.CFrame = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            rootAttachment.Orientation = B(-0, 0, 0)
+            rootAttachment.Position = B(0, 0, 0)
+            rootAttachment.SecondaryAxis = B(0, 1, 0)
+            rootAttachment.Visible = false
+            rootAttachment.Parent = hrp
+            
+            -- Создаем основной ParticleEmitter
+            local particleEmitter = Instance.new("ParticleEmitter")
+            particleEmitter.Name = "ParticleEmitter"
+            particleEmitter.Acceleration = B(0, 0, 0)
+            particleEmitter.Brightness = 1
+            -- Используем accent color вместо фиксированного цвета
+            local accentColor = K.Flags["ThemeAccentColor"]
+            if accentColor and accentColor.Color then
+                -- Если это объект из колорпикера
+                accentColor = accentColor.Color
+            elseif not accentColor then
+                -- Fallback на дефолтный цвет
+                accentColor = z(31, 226, 130)
+            end
+            -- ColorSequence требует минимум 2 точки
+            particleEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            particleEmitter.Drag = 0
+            particleEmitter.EmissionDirection = Enum.NormalId.Top
+            particleEmitter.Enabled = true
+            particleEmitter.FlipbookFramerate = NumberRange.new(20, 20)
+            particleEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid2x2
+            particleEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            particleEmitter.FlipbookStartRandom = true
+            particleEmitter.Lifetime = NumberRange.new(0.15, 0.15)
+            particleEmitter.LightEmission = 1
+            particleEmitter.LightInfluence = 0
+            particleEmitter.LockedToPart = true
+            particleEmitter.Orientation = Enum.ParticleOrientation.FacingCamera
+            particleEmitter.Rate = 4
+            particleEmitter.RotSpeed = NumberRange.new(0, 0)
+            particleEmitter.Rotation = NumberRange.new(-180, 180)
+            particleEmitter.Shape = Enum.ParticleEmitterShape.Box
+            particleEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            particleEmitter.ShapePartial = 1
+            particleEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            particleEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 2)}
+            particleEmitter.Speed = NumberRange.new(0.01, 0.01)
+            particleEmitter.SpreadAngle = Vector2.new(0, 0)
+            particleEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            particleEmitter.Texture = "http://www.roblox.com/asset/?id=12800314277"
+            particleEmitter.TimeScale = 1
+            particleEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            particleEmitter.VelocityInheritance = 0
+            particleEmitter.ZOffset = 2
+            particleEmitter.Parent = rootAttachment
+            
+            -- Создаем Flash ParticleEmitter
+            local flashEmitter = Instance.new("ParticleEmitter")
+            flashEmitter.Name = "Flash"
+            flashEmitter.Acceleration = B(0, 0, 0)
+            flashEmitter.Brightness = 1
+            -- Используем тот же accent color для единообразия
+            flashEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            flashEmitter.Drag = 0
+            flashEmitter.EmissionDirection = Enum.NormalId.Top
+            flashEmitter.Enabled = true
+            flashEmitter.FlipbookFramerate = NumberRange.new(20, 20)
+            flashEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+            flashEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            flashEmitter.FlipbookStartRandom = false
+            flashEmitter.Lifetime = NumberRange.new(0.3, 0.6)
+            flashEmitter.LightEmission = 0
+            flashEmitter.LightInfluence = 0
+            flashEmitter.LockedToPart = true
+            flashEmitter.Orientation = Enum.ParticleOrientation.FacingCamera
+            flashEmitter.Rate = 3
+            flashEmitter.RotSpeed = NumberRange.new(0, 0)
+            flashEmitter.Rotation = NumberRange.new(-360, 360)
+            flashEmitter.Shape = Enum.ParticleEmitterShape.Box
+            flashEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            flashEmitter.ShapePartial = 1
+            flashEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            flashEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 2)}
+            flashEmitter.Speed = NumberRange.new(0, 0)
+            flashEmitter.SpreadAngle = Vector2.new(-360, 360)
+            flashEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            flashEmitter.Texture = "rbxassetid://11372587580"
+            flashEmitter.TimeScale = 1
+            flashEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            flashEmitter.VelocityInheritance = 0
+            flashEmitter.ZOffset = 1
+            flashEmitter.Parent = rootAttachment
+            
+            -- Сохраняем ссылки
+            aura_state.attachment = rootAttachment
+            aura_state.particle_emitter = particleEmitter
+            aura_state.flash_emitter = flashEmitter
+            
+            -- Подключаемся к событию смерти персонажа
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local diedConnection = humanoid.Died:Connect(function()
+                    self:cleanup()
+                end)
+                p(aura_state.cleanup_connections, diedConnection)
+            end
+            
+            -- Подключаемся к событию удаления персонажа
+            local charRemovingConnection = localPlayer.CharacterRemoving:Connect(function()
+                self:cleanup()
+            end)
+            p(aura_state.cleanup_connections, charRemovingConnection)
+            
+            -- Подключаемся к событию появления нового персонажа
+            local charAddedConnection = localPlayer.CharacterAdded:Connect(function()
+                if aura_state.enabled then
+                    -- Ждем пока персонаж полностью загрузится
+                    wait(0.1)
+                    self:createAura()
+                end
+            end)
+            p(aura_state.cleanup_connections, charAddedConnection)
+        end
+        
+        function aura_utility:setEnabled(enabled)
+            aura_state.enabled = enabled
+            
+            if enabled then
+                self:createAura()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function aura_utility:updateColor(newColor)
+            -- Обновляем цвет ауры в реальном времени
+            if not aura_state.enabled or not aura_state.particle_emitter or not aura_state.flash_emitter then
+                return
+            end
+            
+            -- Создаем новый ColorSequence с обновленным цветом
+            local colorSequence = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, newColor),
+                ColorSequenceKeypoint.new(1, newColor)
+            }
+            
+            -- Обновляем цвет обоих emitter'ов
+            aura_state.particle_emitter.Color = colorSequence
+            aura_state.flash_emitter.Color = colorSequence
+        end
+        
+        -- Aura Toggle
+        local _auraToggle = stuffSection:Toggle({
+            Name = "Aura",
+            Default = false,
+            Flag = "aura_enabled",
+            Callback = function(value)
+                aura_utility:setEnabled(value)
+            end
+        })
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.AuraUtility = aura_utility
+        
+    end
 end -- End Visuals Tab
 
 do -- Watermark & Keybinds
@@ -3750,6 +3977,11 @@ do -- Settings Tab
                     L.GradientTitle.Start = ad
                     L.GradientTitle.Middle = ad
                     L.GradientTitle.End = ad
+                end
+                
+                -- Обновляем цвет ауры если она активна
+                if _G.AuraUtility then
+                    _G.AuraUtility:updateColor(ad)
                 end
             end
         }
