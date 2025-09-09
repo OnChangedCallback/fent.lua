@@ -3609,15 +3609,14 @@ do -- Visuals Tab
         
         -- Aura utility functions
         local aura_utility = {}
+        
+        -- Aura система
         local aura_state = {
             enabled = false,
             mode = "Lighting",
-            attachment = nil,
-            particle_emitter = nil,
-            flash_emitter = nil,
-            -- FrostBlades elements
-            beams = {},
+            color = z(31, 226, 130), -- Цвет ауры по умолчанию
             attachments = {},
+            beams = {},
             particle_emitters = {},
             cleanup_connections = {}
         }
@@ -3684,23 +3683,18 @@ do -- Visuals Tab
             -- Очищаем предыдущую ауру
             self:cleanup()
             
-            -- Получаем accent color
-            local accentColor = K.Flags["ThemeAccentColor"]
-            if accentColor and accentColor.Color then
-                accentColor = accentColor.Color
-            elseif not accentColor then
-                accentColor = z(31, 226, 130)
-            end
+            -- Используем кастомный цвет ауры
+            local auraColor = aura_state.color
             
             -- Создаем ауру в зависимости от режима
             if aura_state.mode == "Lighting" then
-                self:createLightingAura(hrp, accentColor)
+                self:createLightingAura(hrp, auraColor)
             elseif aura_state.mode == "FrostBlades" then
-                self:createFrostBladesAura(hrp, accentColor)
+                self:createFrostBladesAura(hrp, auraColor)
             elseif aura_state.mode == "Charge" then
-                self:createChargeAura(hrp, accentColor)
+                self:createChargeAura(hrp, auraColor)
             elseif aura_state.mode == "Atomic" then
-                self:createAtomicAura(hrp, accentColor)
+                self:createAtomicAura(hrp, auraColor)
             end
             
             -- Подключаемся к событиям персонажа
@@ -4242,26 +4236,28 @@ do -- Visuals Tab
             local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
             if humanoid then
                 local diedConnection = humanoid.Died:Connect(function()
-                    self:cleanup()
+                    -- Очищаем только визуальные элементы, но не отключаем систему
+                    for _, attachment in pairs(aura_state.attachments) do
+                        if attachment then
+                            attachment:Destroy()
+                        end
+                    end
+                    for _, beam in pairs(aura_state.beams) do
+                        if beam then
+                            beam:Destroy()
+                        end
+                    end
+                    for _, emitter in pairs(aura_state.particle_emitters) do
+                        if emitter then
+                            emitter:Destroy()
+                        end
+                    end
+                    aura_state.attachments = {}
+                    aura_state.beams = {}
+                    aura_state.particle_emitters = {}
                 end)
                 p(aura_state.cleanup_connections, diedConnection)
             end
-            
-            -- Подключаемся к событию удаления персонажа
-            local charRemovingConnection = localPlayer.CharacterRemoving:Connect(function()
-                self:cleanup()
-            end)
-            p(aura_state.cleanup_connections, charRemovingConnection)
-            
-            -- Подключаемся к событию появления нового персонажа
-            local charAddedConnection = localPlayer.CharacterAdded:Connect(function()
-                if aura_state.enabled then
-                    -- Ждем пока персонаж полностью загрузится
-                    wait(0.1)
-                    self:createAura()
-                end
-            end)
-            p(aura_state.cleanup_connections, charAddedConnection)
         end
         
         function aura_utility:setEnabled(enabled)
@@ -4284,6 +4280,8 @@ do -- Visuals Tab
         end
         
         function aura_utility:updateColor(newColor)
+            aura_state.color = newColor
+            
             if aura_state.mode == "Lighting" then
                 -- Обновляем цвета для Lighting режима
                 if aura_state.particle_emitter then
@@ -4342,12 +4340,22 @@ do -- Visuals Tab
         end
         
         -- Aura Toggle
-        local _auraToggle = stuffSection:Toggle({
+        local auraToggle = stuffSection:Toggle({
             Name = "Aura",
             Default = false,
             Flag = "aura_enabled",
             Callback = function(value)
                 aura_utility:setEnabled(value)
+            end
+        })
+        
+        -- Aura Colorpicker
+        auraToggle:Colorpicker({
+            Name = "Aura Color",
+            Default = z(31, 226, 130), -- Зеленоватый цвет по умолчанию
+            Flag = "aura_color",
+            Callback = function(value)
+                aura_utility:updateColor(value)
             end
         })
         
@@ -4367,6 +4375,24 @@ do -- Visuals Tab
                 end
             end
         })
+        
+        -- Глобальное подключение к событию CharacterAdded для аур
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if aura_state.enabled then
+                aura_utility:createAura()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if aura_state.enabled then
+                    aura_utility:createAura()
+                end
+            end)
+        end
         
         -- Сохраняем в глобальную область для доступа из других частей кода
         _G.AuraUtility = aura_utility
@@ -4480,26 +4506,18 @@ do -- Visuals Tab
             local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
             if humanoid then
                 local diedConnection = humanoid.Died:Connect(function()
-                    self:cleanup()
+                    -- Очищаем только визуальные элементы
+                    if halo_state.attachment then
+                        halo_state.attachment:Destroy()
+                        halo_state.attachment = nil
+                    end
+                    if halo_state.particle_emitter then
+                        halo_state.particle_emitter:Destroy()
+                        halo_state.particle_emitter = nil
+                    end
                 end)
                 table.insert(halo_state.cleanup_connections, diedConnection)
             end
-            
-            -- Подключаемся к событию удаления персонажа
-            local charRemovingConnection = localPlayer.CharacterRemoving:Connect(function()
-                self:cleanup()
-            end)
-            table.insert(halo_state.cleanup_connections, charRemovingConnection)
-            
-            -- Подключаемся к событию появления нового персонажа
-            local charAddedConnection = localPlayer.CharacterAdded:Connect(function()
-                if halo_state.enabled then
-                    -- Ждем пока персонаж полностью загрузится
-                    wait(0.1)
-                    self:createHalo()
-                end
-            end)
-            table.insert(halo_state.cleanup_connections, charAddedConnection)
         end
         
         function halo_utility:setEnabled(enabled)
@@ -4543,6 +4561,24 @@ do -- Visuals Tab
                 halo_utility:updateColor(value)
             end
         })
+        
+        -- Глобальное подключение к событию CharacterAdded для нимба
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if halo_state.enabled then
+                halo_utility:createHalo()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if halo_state.enabled then
+                    halo_utility:createHalo()
+                end
+            end)
+        end
         
         -- Сохраняем в глобальную область для доступа из других частей кода
         _G.HaloUtility = halo_utility
