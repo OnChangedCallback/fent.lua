@@ -3697,6 +3697,10 @@ do -- Visuals Tab
                 self:createLightingAura(hrp, accentColor)
             elseif aura_state.mode == "FrostBlades" then
                 self:createFrostBladesAura(hrp, accentColor)
+            elseif aura_state.mode == "Charge" then
+                self:createChargeAura(hrp, accentColor)
+            elseif aura_state.mode == "Atomic" then
+                self:createAtomicAura(hrp, accentColor)
             end
             
             -- Подключаемся к событиям персонажа
@@ -4075,6 +4079,164 @@ do -- Visuals Tab
             aura_state.particle_emitters = emitters
         end
         
+        function aura_utility:createChargeAura(hrp, accentColor)
+            local attachments = {}
+            local emitters = {}
+            
+            -- Создаем Main attachment
+            local mainAttachment = Instance.new("Attachment")
+            mainAttachment.Name = "Main"
+            mainAttachment.Axis = B(1, 0, 0)
+            mainAttachment.CFrame = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            mainAttachment.Orientation = B(-0, 0, 0)
+            mainAttachment.Position = B(0, 0, 0)
+            mainAttachment.SecondaryAxis = B(0, 1, 0)
+            mainAttachment.Visible = false
+            mainAttachment.Parent = hrp
+            p(attachments, mainAttachment)
+            
+            -- Создаем Energy1 ParticleEmitter
+            local energy1Emitter = Instance.new("ParticleEmitter")
+            energy1Emitter.Name = "Energy1"
+            energy1Emitter.Acceleration = B(0, 0, 0)
+            energy1Emitter.Brightness = 25
+            energy1Emitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            energy1Emitter.Drag = 0
+            energy1Emitter.EmissionDirection = Enum.NormalId.Top
+            energy1Emitter.Enabled = true
+            energy1Emitter.FlipbookFramerate = NumberRange.new(1, 1)
+            energy1Emitter.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+            energy1Emitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            energy1Emitter.FlipbookStartRandom = false
+            energy1Emitter.Lifetime = NumberRange.new(0.3, 0.3)
+            energy1Emitter.LightEmission = 1
+            energy1Emitter.LightInfluence = 0
+            energy1Emitter.LockedToPart = true
+            energy1Emitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            energy1Emitter.Rate = 20
+            energy1Emitter.RotSpeed = NumberRange.new(0, 0)
+            energy1Emitter.Rotation = NumberRange.new(-360, 360)
+            energy1Emitter.Shape = Enum.ParticleEmitterShape.Box
+            energy1Emitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            energy1Emitter.ShapePartial = 1
+            energy1Emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            energy1Emitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 5), NumberSequenceKeypoint.new(1, 5)}
+            energy1Emitter.Speed = NumberRange.new(0.001, 0.001)
+            energy1Emitter.SpreadAngle = Vector2.new(75, 75)
+            energy1Emitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            energy1Emitter.Texture = "rbxassetid://15041986621"
+            energy1Emitter.TimeScale = 1
+            energy1Emitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            energy1Emitter.VelocityInheritance = 0
+            energy1Emitter.ZOffset = 1
+            energy1Emitter.Parent = mainAttachment
+            p(emitters, energy1Emitter)
+            
+            -- Создаем Energy2 ParticleEmitter
+            local energy2Emitter = Instance.new("ParticleEmitter")
+            energy2Emitter.Name = "Energy2"
+            energy2Emitter.Acceleration = B(0, 0, 0)
+            energy2Emitter.Brightness = 25
+            energy2Emitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            energy2Emitter.Drag = 0
+            energy2Emitter.EmissionDirection = Enum.NormalId.Top
+            energy2Emitter.Enabled = true
+            energy2Emitter.FlipbookFramerate = NumberRange.new(1, 1)
+            energy2Emitter.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+            energy2Emitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            energy2Emitter.FlipbookStartRandom = false
+            energy2Emitter.Lifetime = NumberRange.new(0.3, 0.3)
+            energy2Emitter.LightEmission = 1
+            energy2Emitter.LightInfluence = 0
+            energy2Emitter.LockedToPart = true
+            energy2Emitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            energy2Emitter.Rate = 20
+            energy2Emitter.RotSpeed = NumberRange.new(0, 0)
+            energy2Emitter.Rotation = NumberRange.new(-360, 360)
+            energy2Emitter.Shape = Enum.ParticleEmitterShape.Box
+            energy2Emitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            energy2Emitter.ShapePartial = 1
+            energy2Emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            energy2Emitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 5), NumberSequenceKeypoint.new(1, 5)}
+            energy2Emitter.Speed = NumberRange.new(0.001, 0.001)
+            energy2Emitter.SpreadAngle = Vector2.new(75, 75)
+            energy2Emitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            energy2Emitter.Texture = "rbxassetid://15041986460"
+            energy2Emitter.TimeScale = 1
+            energy2Emitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            energy2Emitter.VelocityInheritance = 0
+            energy2Emitter.ZOffset = 1
+            energy2Emitter.Parent = mainAttachment
+            p(emitters, energy2Emitter)
+            
+            -- Сохраняем ссылки
+            aura_state.attachments = attachments
+            aura_state.beams = {}
+            aura_state.particle_emitters = emitters
+        end
+        
+        function aura_utility:createAtomicAura(hrp, accentColor)
+            local attachments = {}
+            local emitters = {}
+            
+            -- Создаем Attachment для BlackSwirl
+            local atomicAttachment = Instance.new("Attachment")
+            atomicAttachment.Name = "AtomicAttachment"
+            atomicAttachment.Parent = hrp
+            p(attachments, atomicAttachment)
+            
+            -- Создаем BlackSwirl ParticleEmitter
+            local blackSwirl = Instance.new("ParticleEmitter")
+            blackSwirl.Name = "BlackSwirl"
+            blackSwirl.Acceleration = B(0, 0, 0)
+            blackSwirl.Brightness = 1
+            blackSwirl.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            blackSwirl.Drag = 0
+            blackSwirl.EmissionDirection = Enum.NormalId.Top
+            blackSwirl.Enabled = true
+            blackSwirl.FlipbookFramerate = NumberRange.new(1, 1)
+            blackSwirl.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            blackSwirl.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            blackSwirl.FlipbookStartRandom = false
+            blackSwirl.Lifetime = NumberRange.new(3, 3)
+            blackSwirl.LightEmission = 1
+            blackSwirl.LightInfluence = 0
+            blackSwirl.LockedToPart = true
+            blackSwirl.Orientation = Enum.ParticleOrientation.VelocityParallel
+            blackSwirl.Rate = 5
+            blackSwirl.RotSpeed = NumberRange.new(360, 360)
+            blackSwirl.Rotation = NumberRange.new(-180, 180)
+            blackSwirl.Shape = Enum.ParticleEmitterShape.Box
+            blackSwirl.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            blackSwirl.ShapePartial = 1
+            blackSwirl.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            blackSwirl.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 4), NumberSequenceKeypoint.new(1, 4)}
+            blackSwirl.Speed = NumberRange.new(0.01, 0.01)
+            blackSwirl.SpreadAngle = Vector2.new(360, -360)
+            blackSwirl.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            blackSwirl.Texture = "rbxassetid://10558425570"
+            blackSwirl.TimeScale = 1
+            blackSwirl.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            blackSwirl.VelocityInheritance = 0
+            blackSwirl.ZOffset = 0.2
+            blackSwirl.Parent = atomicAttachment
+            p(emitters, blackSwirl)
+            
+            -- Сохраняем ссылки
+            aura_state.attachments = attachments
+            aura_state.beams = {}
+            aura_state.particle_emitters = emitters
+        end
+        
         function aura_utility:setupCharacterEvents(localPlayer)
             -- Подключаемся к событию смерти персонажа
             local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -4156,6 +4318,26 @@ do -- Visuals Tab
                         }
                     end
                 end
+            elseif aura_state.mode == "Charge" then
+                -- Обновляем цвета для Charge режима
+                for _, emitter in pairs(aura_state.particle_emitters) do
+                    if emitter then
+                        emitter.Color = ColorSequence.new{
+                            ColorSequenceKeypoint.new(0, newColor),
+                            ColorSequenceKeypoint.new(1, newColor)
+                        }
+                    end
+                end
+            elseif aura_state.mode == "Atomic" then
+                -- Обновляем цвета для Atomic режима
+                for _, emitter in pairs(aura_state.particle_emitters) do
+                    if emitter then
+                        emitter.Color = ColorSequence.new{
+                            ColorSequenceKeypoint.new(0, newColor),
+                            ColorSequenceKeypoint.new(1, newColor)
+                        }
+                    end
+                end
             end
         end
         
@@ -4170,13 +4352,19 @@ do -- Visuals Tab
         })
         
         -- Aura Mode Dropdown
-        local _auraModeDropdown = stuffSection:Dropdown({
-            Name = "Mode",
-            Items = {"Lighting", "FrostBlades"},
+        local _auraMode = stuffSection:Dropdown({
+            Name = "Aura Mode",
+            Items = {"Lighting", "FrostBlades", "Charge", "Atomic"},
             Default = "Lighting",
             Flag = "aura_mode",
             Callback = function(value)
-                aura_utility:setMode(value)
+                aura_state.mode = value
+                -- Если аура включена, пересоздаем её с новым режимом
+                if aura_state.enabled then
+                    aura_utility:setEnabled(false)
+                    task.wait(0.1)
+                    aura_utility:setEnabled(true)
+                end
             end
         })
         
