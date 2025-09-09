@@ -43,14 +43,17 @@ local cam = workspace.CurrentCamera
 local Vector2 = Vector2
 local Instance = Instance
 local ColorSequence = ColorSequence
+local ColorSequenceKeypoint = ColorSequenceKeypoint
 local NumberSequence = NumberSequence
+local NumberSequenceKeypoint = NumberSequenceKeypoint
+local NumberRange = NumberRange
 local Enum = Enum
 local hookmetamethod = hookmetamethod
 local checkcaller = checkcaller
 local newcclosure = newcclosure
 local getgenv = getgenv
-local task = task
-local wait = wait
+local task = task or {}
+local wait = wait or function(t) return task.wait(t) end
 local fireclickdetector = fireclickdetector
 local getconnections = getconnections
 local debug = debug
@@ -3608,9 +3611,14 @@ do -- Visuals Tab
         local aura_utility = {}
         local aura_state = {
             enabled = false,
+            mode = "Lighting",
             attachment = nil,
             particle_emitter = nil,
             flash_emitter = nil,
+            -- FrostBlades elements
+            beams = {},
+            attachments = {},
+            particle_emitters = {},
             cleanup_connections = {}
         }
         
@@ -3623,7 +3631,7 @@ do -- Visuals Tab
             end
             aura_state.cleanup_connections = {}
             
-            -- Удаляем particle emitters
+            -- Удаляем Lighting элементы
             if aura_state.particle_emitter then
                 aura_state.particle_emitter:Destroy()
                 aura_state.particle_emitter = nil
@@ -3634,11 +3642,32 @@ do -- Visuals Tab
                 aura_state.flash_emitter = nil
             end
             
-            -- Удаляем attachment
             if aura_state.attachment then
                 aura_state.attachment:Destroy()
                 aura_state.attachment = nil
             end
+            
+            -- Удаляем FrostBlades элементы
+            for _, beam in pairs(aura_state.beams) do
+                if beam then
+                    beam:Destroy()
+                end
+            end
+            aura_state.beams = {}
+            
+            for _, attachment in pairs(aura_state.attachments) do
+                if attachment then
+                    attachment:Destroy()
+                end
+            end
+            aura_state.attachments = {}
+            
+            for _, emitter in pairs(aura_state.particle_emitters) do
+                if emitter then
+                    emitter:Destroy()
+                end
+            end
+            aura_state.particle_emitters = {}
         end
         
         function aura_utility:createAura()
@@ -3655,6 +3684,26 @@ do -- Visuals Tab
             -- Очищаем предыдущую ауру
             self:cleanup()
             
+            -- Получаем accent color
+            local accentColor = K.Flags["ThemeAccentColor"]
+            if accentColor and accentColor.Color then
+                accentColor = accentColor.Color
+            elseif not accentColor then
+                accentColor = z(31, 226, 130)
+            end
+            
+            -- Создаем ауру в зависимости от режима
+            if aura_state.mode == "Lighting" then
+                self:createLightingAura(hrp, accentColor)
+            elseif aura_state.mode == "FrostBlades" then
+                self:createFrostBladesAura(hrp, accentColor)
+            end
+            
+            -- Подключаемся к событиям персонажа
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function aura_utility:createLightingAura(hrp, accentColor)
             -- Создаем RootAttachment
             local rootAttachment = Instance.new("Attachment")
             rootAttachment.Name = "RootAttachment"
@@ -3671,16 +3720,6 @@ do -- Visuals Tab
             particleEmitter.Name = "ParticleEmitter"
             particleEmitter.Acceleration = B(0, 0, 0)
             particleEmitter.Brightness = 1
-            -- Используем accent color вместо фиксированного цвета
-            local accentColor = K.Flags["ThemeAccentColor"]
-            if accentColor and accentColor.Color then
-                -- Если это объект из колорпикера
-                accentColor = accentColor.Color
-            elseif not accentColor then
-                -- Fallback на дефолтный цвет
-                accentColor = z(31, 226, 130)
-            end
-            -- ColorSequence требует минимум 2 точки
             particleEmitter.Color = ColorSequence.new{
                 ColorSequenceKeypoint.new(0, accentColor),
                 ColorSequenceKeypoint.new(1, accentColor)
@@ -3720,7 +3759,6 @@ do -- Visuals Tab
             flashEmitter.Name = "Flash"
             flashEmitter.Acceleration = B(0, 0, 0)
             flashEmitter.Brightness = 1
-            -- Используем тот же accent color для единообразия
             flashEmitter.Color = ColorSequence.new{
                 ColorSequenceKeypoint.new(0, accentColor),
                 ColorSequenceKeypoint.new(1, accentColor)
@@ -3759,7 +3797,285 @@ do -- Visuals Tab
             aura_state.attachment = rootAttachment
             aura_state.particle_emitter = particleEmitter
             aura_state.flash_emitter = flashEmitter
+        end
+        
+        function aura_utility:createFrostBladesAura(hrp, accentColor)
+            local attachments = {}
+            local beams = {}
+            local emitters = {}
             
+            -- Создаем RootAttachment
+            local rootAttachment = Instance.new("Attachment")
+            rootAttachment.Name = "RootAttachment"
+            rootAttachment.Axis = B(1, 0, 0)
+            rootAttachment.CFrame = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            rootAttachment.Orientation = B(-0, 0, 0)
+            rootAttachment.Position = B(0, 0, 0)
+            rootAttachment.SecondaryAxis = B(0, 1, 0)
+            rootAttachment.Visible = false
+            rootAttachment.Parent = hrp
+            p(attachments, rootAttachment)
+            
+            -- Создаем bottom attachment
+            local bottomAttachment = Instance.new("Attachment")
+            bottomAttachment.Name = "bottom"
+            bottomAttachment.Axis = B(1, 0, 0)
+            bottomAttachment.CFrame = C(0, -3, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            bottomAttachment.Orientation = B(-0, 0, 0)
+            bottomAttachment.Position = B(0, -3, 0)
+            bottomAttachment.SecondaryAxis = B(0, 1, 0)
+            bottomAttachment.Visible = false
+            bottomAttachment.Parent = hrp
+            p(attachments, bottomAttachment)
+            
+            -- Создаем whirl ParticleEmitter на bottom
+            local whirlEmitter = Instance.new("ParticleEmitter")
+            whirlEmitter.Name = "whirl"
+            whirlEmitter.Acceleration = B(0, 0, 0)
+            whirlEmitter.Brightness = 5.199999809265137
+            whirlEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            whirlEmitter.Drag = 0
+            whirlEmitter.EmissionDirection = Enum.NormalId.Top
+            whirlEmitter.Enabled = true
+            whirlEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            whirlEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            whirlEmitter.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            whirlEmitter.FlipbookStartRandom = false
+            whirlEmitter.Lifetime = NumberRange.new(2, 2)
+            whirlEmitter.LightEmission = 0.15000000596046448
+            whirlEmitter.LightInfluence = 0
+            whirlEmitter.LockedToPart = true
+            whirlEmitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            whirlEmitter.Rate = 2
+            whirlEmitter.RotSpeed = NumberRange.new(400, 400)
+            whirlEmitter.Rotation = NumberRange.new(0, 90)
+            whirlEmitter.Shape = Enum.ParticleEmitterShape.Box
+            whirlEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            whirlEmitter.ShapePartial = 1
+            whirlEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            whirlEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 3)}
+            whirlEmitter.Speed = NumberRange.new(1.5, 1.5)
+            whirlEmitter.SpreadAngle = Vector2.new(5, 5)
+            whirlEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            whirlEmitter.Texture = "rbxassetid://9098555411"
+            whirlEmitter.TimeScale = 1
+            whirlEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.153906, 0), NumberSequenceKeypoint.new(0.847641, 0), NumberSequenceKeypoint.new(1, 1)}
+            whirlEmitter.VelocityInheritance = 0
+            whirlEmitter.ZOffset = 0
+            whirlEmitter.Parent = bottomAttachment
+            p(emitters, whirlEmitter)
+            
+            -- Создаем specs ParticleEmitter на bottom
+            local specsEmitter = Instance.new("ParticleEmitter")
+            specsEmitter.Name = "specs"
+            specsEmitter.Acceleration = B(0, 3, 0)
+            specsEmitter.Brightness = 10
+            specsEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            specsEmitter.Drag = 0
+            specsEmitter.EmissionDirection = Enum.NormalId.Top
+            specsEmitter.Enabled = true
+            specsEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            specsEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            specsEmitter.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            specsEmitter.FlipbookStartRandom = false
+            specsEmitter.Lifetime = NumberRange.new(1.5, 1.8)
+            specsEmitter.LightEmission = 1
+            specsEmitter.LightInfluence = 0
+            specsEmitter.LockedToPart = true
+            specsEmitter.Orientation = Enum.ParticleOrientation.FacingCamera
+            specsEmitter.Rate = 20
+            specsEmitter.RotSpeed = NumberRange.new(1000, 1000)
+            specsEmitter.Rotation = NumberRange.new(0, 0)
+            specsEmitter.Shape = Enum.ParticleEmitterShape.Box
+            specsEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            specsEmitter.ShapePartial = 1
+            specsEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            specsEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.594, 0.1), NumberSequenceKeypoint.new(1, 0)}
+            specsEmitter.Speed = NumberRange.new(3, 3)
+            specsEmitter.SpreadAngle = Vector2.new(90, 90)
+            specsEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            specsEmitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+            specsEmitter.TimeScale = 1
+            specsEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.160866, 1), NumberSequenceKeypoint.new(0.167827, 0), NumberSequenceKeypoint.new(1, 0)}
+            specsEmitter.VelocityInheritance = 0
+            specsEmitter.ZOffset = 0
+            specsEmitter.Parent = bottomAttachment
+            p(emitters, specsEmitter)
+            
+            -- Создаем en attachments (5 штук)
+            local enAttachments = {}
+            local enPositions = {
+                {-3.5, 3.5, -2.5},
+                {-4.5, 2, 3},
+                {-0.0999984741, 4, 3.19999695},
+                {3.89999771, 4.79999971, 2},
+                {3.29999924, 2.79999971, -2.19999695}
+            }
+            
+            for i = 1, 5 do
+                local pos = enPositions[i]
+                local enAttachment = Instance.new("Attachment")
+                enAttachment.Name = "en" .. i
+                enAttachment.Axis = B(0, 0, -1)
+                enAttachment.CFrame = C(pos[1], pos[2], pos[3], 0, 0, 1, 0, 1, -0, -1, 0, 0)
+                enAttachment.Orientation = B(-0, 90, 0)
+                enAttachment.Position = B(pos[1], pos[2], pos[3])
+                enAttachment.SecondaryAxis = B(0, 1, 0)
+                enAttachment.Visible = false
+                enAttachment.Parent = hrp
+                p(attachments, enAttachment)
+                enAttachments[i] = enAttachment
+            end
+            
+            -- Создаем st attachments (5 штук)
+            local stAttachments = {}
+            local stPositions = {
+                {-1.49996948, -2.99999428, -0.999954224},
+                {-1.5, -3, 1},
+                {0.299999237, -3, 1.79999542},
+                {2.09999847, -3, 0.399993896},
+                {1.29999924, -3, -1.40000916}
+            }
+            
+            for i = 1, 5 do
+                local pos = stPositions[i]
+                local stAttachment = Instance.new("Attachment")
+                stAttachment.Name = "st" .. i
+                stAttachment.Axis = B(0, 0, -1)
+                stAttachment.CFrame = C(pos[1], pos[2], pos[3], 0, 0, 1, 0, 1, -0, -1, 0, 0)
+                stAttachment.Orientation = B(-0, 90, 0)
+                stAttachment.Position = B(pos[1], pos[2], pos[3])
+                stAttachment.SecondaryAxis = B(0, 1, 0)
+                stAttachment.Visible = false
+                stAttachment.Parent = hrp
+                p(attachments, stAttachment)
+                stAttachments[i] = stAttachment
+            end
+            
+            -- Создаем end1 и start1 attachments
+            local endAttachment = Instance.new("Attachment")
+            endAttachment.Name = "end1"
+            endAttachment.Axis = B(0, -1, 0)
+            endAttachment.CFrame = C(0, -2.88535929, -3.5, 0, -1, -4.37113883e-08, -1, 0, -0, 0, 4.37113883e-08, -1)
+            endAttachment.Orientation = B(-0, -179.99998474121094, -90)
+            endAttachment.Position = B(0, -2.885359287261963, -3.5)
+            endAttachment.SecondaryAxis = B(-1, -4.371138828673793e-08, 1.5099580252808664e-07)
+            endAttachment.Visible = false
+            endAttachment.Parent = hrp
+            p(attachments, endAttachment)
+            
+            local startAttachment = Instance.new("Attachment")
+            startAttachment.Name = "start1"
+            startAttachment.Axis = B(0, -1, 0)
+            startAttachment.CFrame = C(0, -2.88535929, 3.5, 0, -1, -4.37113883e-08, -1, 0, -0, 0, 4.37113883e-08, -1)
+            startAttachment.Orientation = B(-0, -179.99998474121094, -90)
+            startAttachment.Position = B(0, -2.885359287261963, 3.5)
+            startAttachment.SecondaryAxis = B(-1, -4.371138828673793e-08, 1.5099580252808664e-07)
+            startAttachment.Visible = false
+            startAttachment.Parent = hrp
+            p(attachments, startAttachment)
+            
+            -- Создаем blade beams (5 штук)
+            for i = 1, 5 do
+                local bladeBeam = Instance.new("Beam")
+                bladeBeam.Name = "blade" .. i
+                bladeBeam.Attachment0 = enAttachments[i]
+                bladeBeam.Attachment1 = stAttachments[i]
+                bladeBeam.Brightness = 1
+                bladeBeam.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, accentColor),
+                    ColorSequenceKeypoint.new(1, accentColor)
+                }
+                bladeBeam.CurveSize0 = 0
+                bladeBeam.CurveSize1 = 0
+                bladeBeam.Enabled = true
+                bladeBeam.FaceCamera = true
+                bladeBeam.LightEmission = 1
+                bladeBeam.LightInfluence = 1
+                bladeBeam.Segments = 10
+                bladeBeam.Texture = "rbxassetid://14050932611"
+                bladeBeam.TextureLength = 1
+                bladeBeam.TextureMode = Enum.TextureMode.Stretch
+                bladeBeam.TextureSpeed = 0
+                bladeBeam.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+                bladeBeam.Width0 = 0
+                bladeBeam.Width1 = 8
+                bladeBeam.ZOffset = 0
+                bladeBeam.Parent = hrp
+                p(beams, bladeBeam)
+            end
+            
+            -- Создаем energy beams (5 штук)
+            for i = 1, 5 do
+                local energyBeam = Instance.new("Beam")
+                energyBeam.Name = "energy" .. i
+                energyBeam.Attachment0 = stAttachments[i]
+                energyBeam.Attachment1 = enAttachments[i]
+                energyBeam.Brightness = 6.534999847412109
+                energyBeam.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, accentColor),
+                    ColorSequenceKeypoint.new(1, accentColor)
+                }
+                energyBeam.CurveSize0 = 0
+                energyBeam.CurveSize1 = 0
+                energyBeam.Enabled = true
+                energyBeam.FaceCamera = true
+                energyBeam.LightEmission = 1
+                energyBeam.LightInfluence = 0
+                energyBeam.Segments = 10
+                energyBeam.Texture = "http://www.roblox.com/asset/?id=6365212829"
+                energyBeam.TextureLength = 10
+                energyBeam.TextureMode = Enum.TextureMode.Static
+                energyBeam.TextureSpeed = 1
+                energyBeam.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.845321, 0.01875), NumberSequenceKeypoint.new(0.887858, 1), NumberSequenceKeypoint.new(1, 1)}
+                energyBeam.Width0 = 0.5
+                energyBeam.Width1 = 0.5
+                energyBeam.ZOffset = 0.10000000149011612
+                energyBeam.Parent = hrp
+                p(beams, energyBeam)
+            end
+            
+            -- Создаем glow beam
+            local glowBeam = Instance.new("Beam")
+            glowBeam.Name = "glow"
+            glowBeam.Attachment0 = endAttachment
+            glowBeam.Attachment1 = startAttachment
+            glowBeam.Brightness = 2.265000104904175
+            glowBeam.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            glowBeam.CurveSize0 = 0
+            glowBeam.CurveSize1 = 0
+            glowBeam.Enabled = true
+            glowBeam.FaceCamera = false
+            glowBeam.LightEmission = 1
+            glowBeam.LightInfluence = 0
+            glowBeam.Segments = 10
+            glowBeam.Texture = "http://www.roblox.com/asset/?id=4464710465"
+            glowBeam.TextureLength = 1
+            glowBeam.TextureMode = Enum.TextureMode.Stretch
+            glowBeam.TextureSpeed = 0
+            glowBeam.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0.5)}
+            glowBeam.Width0 = 8
+            glowBeam.Width1 = 8
+            glowBeam.ZOffset = 0
+            glowBeam.Parent = hrp
+            p(beams, glowBeam)
+            
+            -- Сохраняем ссылки
+            aura_state.attachments = attachments
+            aura_state.beams = beams
+            aura_state.particle_emitters = emitters
+        end
+        
+        function aura_utility:setupCharacterEvents(localPlayer)
             -- Подключаемся к событию смерти персонажа
             local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
             if humanoid then
@@ -3796,21 +4112,51 @@ do -- Visuals Tab
             end
         end
         
-        function aura_utility:updateColor(newColor)
-            -- Обновляем цвет ауры в реальном времени
-            if not aura_state.enabled or not aura_state.particle_emitter or not aura_state.flash_emitter then
-                return
+        function aura_utility:setMode(mode)
+            aura_state.mode = mode
+            
+            -- Если аура включена, пересоздаем ее с новым режимом
+            if aura_state.enabled then
+                self:createAura()
             end
-            
-            -- Создаем новый ColorSequence с обновленным цветом
-            local colorSequence = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, newColor),
-                ColorSequenceKeypoint.new(1, newColor)
-            }
-            
-            -- Обновляем цвет обоих emitter'ов
-            aura_state.particle_emitter.Color = colorSequence
-            aura_state.flash_emitter.Color = colorSequence
+        end
+        
+        function aura_utility:updateColor(newColor)
+            if aura_state.mode == "Lighting" then
+                -- Обновляем цвета для Lighting режима
+                if aura_state.particle_emitter then
+                    aura_state.particle_emitter.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, newColor),
+                        ColorSequenceKeypoint.new(1, newColor)
+                    }
+                end
+                
+                if aura_state.flash_emitter then
+                    aura_state.flash_emitter.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, newColor),
+                        ColorSequenceKeypoint.new(1, newColor)
+                    }
+                end
+            elseif aura_state.mode == "FrostBlades" then
+                -- Обновляем цвета для FrostBlades режима
+                for _, beam in pairs(aura_state.beams) do
+                    if beam then
+                        beam.Color = ColorSequence.new{
+                            ColorSequenceKeypoint.new(0, newColor),
+                            ColorSequenceKeypoint.new(1, newColor)
+                        }
+                    end
+                end
+                
+                for _, emitter in pairs(aura_state.particle_emitters) do
+                    if emitter then
+                        emitter.Color = ColorSequence.new{
+                            ColorSequenceKeypoint.new(0, newColor),
+                            ColorSequenceKeypoint.new(1, newColor)
+                        }
+                    end
+                end
+            end
         end
         
         -- Aura Toggle
@@ -3820,6 +4166,17 @@ do -- Visuals Tab
             Flag = "aura_enabled",
             Callback = function(value)
                 aura_utility:setEnabled(value)
+            end
+        })
+        
+        -- Aura Mode Dropdown
+        local _auraModeDropdown = stuffSection:Dropdown({
+            Name = "Mode",
+            Items = {"Lighting", "FrostBlades"},
+            Default = "Lighting",
+            Flag = "aura_mode",
+            Callback = function(value)
+                aura_utility:setMode(value)
             end
         })
         
