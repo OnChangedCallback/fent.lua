@@ -4586,7 +4586,7 @@ do -- Visuals Tab
         -- Snow система
         local snow_state = {
             enabled = false,
-            color = z(0, 0.6, 1), -- Голубой цвет по умолчанию
+            color = z(255, 255, 255), -- Белый цвет по умолчанию
             part = nil,
             particle_emitter = nil,
             weld_constraint = nil,
@@ -4780,7 +4780,7 @@ do -- Visuals Tab
         -- Snow Colorpicker
         snowToggle:Colorpicker({
             Name = "Snow Color",
-            Default = z(0, 0.6, 1), -- Голубой цвет по умолчанию
+            Default = z(255, 255, 255), -- Белый цвет по умолчанию
             Flag = "snow_color",
             Callback = function(value)
                 snow_utility:updateColor(value)
