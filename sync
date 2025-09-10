@@ -3625,7 +3625,21 @@ do -- Visuals Tab
             char_removing_conn = nil,
             died_conn = nil,
             original_materials = {},  -- хранение оригинальных материалов
-            original_colors = {}      -- хранение оригинальных цветов
+            original_colors = {},      -- хранение оригинальных цветов
+            selfMaterialConnection = nil,
+            selfMaterialChildConn = nil,
+            appearanceConn = nil  -- добавляем поле для CharacterAppearanceLoaded
+        }
+        
+        -- R15 части тела для проверки
+        local R15Parts = {
+            ["Head"] = true,
+            ["UpperTorso"] = true, ["LowerTorso"] = true,
+            ["LeftUpperArm"] = true, ["LeftLowerArm"] = true, ["LeftHand"] = true,
+            ["RightUpperArm"] = true, ["RightLowerArm"] = true, ["RightHand"] = true,
+            ["LeftUpperLeg"] = true, ["LeftLowerLeg"] = true, ["LeftFoot"] = true,
+            ["RightUpperLeg"] = true, ["RightLowerLeg"] = true, ["RightFoot"] = true,
+            ["HumanoidRootPart"] = true
         }
         
         -- Функция создания local highlight
@@ -3636,51 +3650,191 @@ do -- Visuals Tab
             return highlight
         end
         
-        -- Функция сохранения оригинальных материалов и цветов
-        local function saveOriginalProperties(character)
+        -- Функция применения ForceField материала (логика из anotherscript)
+        local function ApplyForceFieldBody(character)
             if not character then return end
-            
-            localHighlightData.original_materials = {}
-            localHighlightData.original_colors = {}
-            
-            for _, part in pairs(character:GetChildren()) do
-                if part:IsA("BasePart") then
-                    localHighlightData.original_materials[part] = part.Material
-                    localHighlightData.original_colors[part] = part.Color
-                end
-            end
-        end
-        
-        -- Функция применения ForceField материала
-        local function applySelfMaterial(character)
-            if not character or not K.Flags or not K.Flags["self_material"] then
-                return
-            end
             
             local selfColor = K.Flags["self_material_color"] or z(255, 255, 255)
+            local selfTransparency = K.Flags["self_material_transparency"] or 0
             
             for _, part in pairs(character:GetChildren()) do
-                if part:IsA("BasePart") then
+                if part:IsA("BasePart") and R15Parts[part.Name] then
+                    -- Сохраняем оригинальный цвет перед изменением
+                    if not localHighlightData.original_colors[part.Name] then
+                        localHighlightData.original_colors[part.Name] = part.Color
+                    end
+                    if not localHighlightData.original_materials[part.Name] then
+                        localHighlightData.original_materials[part.Name] = part.Material
+                    end
+                    
+                    -- Применяем ForceField материал и цвет всегда
                     part.Material = Enum.Material.ForceField
                     part.Color = selfColor
+                    -- Не меняем прозрачность HumanoidRootPart
+                    if part.Name ~= "HumanoidRootPart" then
+                        part.Transparency = selfTransparency
+                    end
                 end
             end
         end
         
-        -- Функция восстановления оригинальных материалов
-        local function restoreOriginalMaterials(character)
+        -- Функция скрытия одежды
+        local function HideClothes(character)
             if not character then return end
+            local folder = character:FindFirstChild("SimpleBotHiddenClothes")
+            if not folder then
+                folder = Instance.new("Folder")
+                folder.Name = "SimpleBotHiddenClothes"
+                folder.Parent = character
+            end
             
-            -- Восстанавливаем материалы и цвета для всех частей персонажа
-            for _, part in pairs(character:GetChildren()) do
-                if part:IsA("BasePart") then
-                    -- Восстанавливаем материал если он был сохранен
-                    if localHighlightData.original_materials[part] then
-                        part.Material = localHighlightData.original_materials[part]
+            for _, obj in pairs(character:GetChildren()) do
+                if obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") then
+                    obj.Parent = folder
+                end
+            end
+        end
+        
+        -- Функция восстановления одежды
+        local function RestoreClothes(character)
+            if not character then return end
+            local folder = character:FindFirstChild("SimpleBotHiddenClothes")
+            if folder then
+                for _, obj in pairs(folder:GetChildren()) do
+                    obj.Parent = character
+                end
+                folder:Destroy()
+            end
+        end
+        
+        -- Функция включения Self Material
+        local function EnableSelfMaterial()
+            if not K.Flags["self_material"] then return end
+            if not g.Character then return end
+            
+            -- Очищаем сохраненные цвета при новом включении
+            localHighlightData.original_colors = {}
+            localHighlightData.original_materials = {}
+            
+            ApplyForceFieldBody(g.Character)
+            HideClothes(g.Character)
+            
+            -- ChildAdded для новых частей
+            if not localHighlightData.selfMaterialChildConn then
+                localHighlightData.selfMaterialChildConn = g.Character.ChildAdded:Connect(function(obj)
+                    if obj:IsA("BasePart") and R15Parts[obj.Name] then
+                        if K.Flags["self_material"] then
+                            -- Сохраняем оригинальный цвет новой части
+                            if not localHighlightData.original_colors[obj.Name] then
+                                localHighlightData.original_colors[obj.Name] = obj.Color
+                            end
+                            if not localHighlightData.original_materials[obj.Name] then
+                                localHighlightData.original_materials[obj.Name] = obj.Material
+                            end
+                            
+                            obj.Material = Enum.Material.ForceField
+                            obj.Color = K.Flags["self_material_color"] or z(255, 255, 255)
+                            if obj.Name ~= "HumanoidRootPart" then
+                                obj.Transparency = K.Flags["self_material_transparency"] or 0
+                            end
+                        end
                     end
-                    -- Восстанавливаем цвет если он был сохранен
-                    if localHighlightData.original_colors[part] then
-                        part.Color = localHighlightData.original_colors[part]
+                end)
+            end
+            
+            -- Обработчик респавна
+            if not localHighlightData.selfMaterialConnection then
+                localHighlightData.selfMaterialConnection = g.CharacterAdded:Connect(function(character)
+                    -- Очищаем сохраненные данные при респавне
+                    localHighlightData.original_colors = {}
+                    localHighlightData.original_materials = {}
+                    
+                    -- Функция применения Self Material с задержками
+                    local function applyWithDelay()
+                        if K.Flags["self_material"] and character and g and g.Character == character then
+                            ApplyForceFieldBody(character)
+                            HideClothes(character)
+                        end
+                    end
+                    
+                    -- Применяем несколько раз с задержками для гарантии
+                    task.delay(0.5, applyWithDelay)
+                    task.delay(1.0, applyWithDelay)
+                    task.delay(1.5, applyWithDelay)
+                    
+                    -- Обработчик CharacterAppearanceLoaded для применения после загрузки внешности
+                    if localHighlightData.appearanceConn then
+                        localHighlightData.appearanceConn:Disconnect()
+                        localHighlightData.appearanceConn = nil
+                    end
+                    
+                    localHighlightData.appearanceConn = g.CharacterAppearanceLoaded:Connect(function(loadedChar)
+                        if loadedChar ~= character then return end
+                        task.delay(0.2, applyWithDelay)
+                    end)
+                    
+                    -- Переподключаем ChildAdded
+                    if localHighlightData.selfMaterialChildConn then 
+                        localHighlightData.selfMaterialChildConn:Disconnect() 
+                    end
+                    localHighlightData.selfMaterialChildConn = character.ChildAdded:Connect(function(obj)
+                        if obj:IsA("BasePart") and R15Parts[obj.Name] then
+                            if K.Flags["self_material"] then
+                                -- Сохраняем оригинальный цвет новой части
+                                if not localHighlightData.original_colors[obj.Name] then
+                                    localHighlightData.original_colors[obj.Name] = obj.Color
+                                end
+                                if not localHighlightData.original_materials[obj.Name] then
+                                    localHighlightData.original_materials[obj.Name] = obj.Material
+                                end
+                                
+                                obj.Material = Enum.Material.ForceField
+                                obj.Color = K.Flags["self_material_color"] or z(255, 255, 255)
+                                if obj.Name ~= "HumanoidRootPart" then
+                                    obj.Transparency = K.Flags["self_material_transparency"] or 0
+                                end
+                            end
+                        end
+                    end)
+                end)
+            end
+        end
+        
+        -- Функция отключения Self Material
+        local function DisableSelfMaterial()
+            if localHighlightData.selfMaterialConnection then 
+                localHighlightData.selfMaterialConnection:Disconnect() 
+                localHighlightData.selfMaterialConnection = nil 
+            end
+            if localHighlightData.selfMaterialChildConn then 
+                localHighlightData.selfMaterialChildConn:Disconnect() 
+                localHighlightData.selfMaterialChildConn = nil 
+            end
+            if localHighlightData.appearanceConn then
+                localHighlightData.appearanceConn:Disconnect()
+                localHighlightData.appearanceConn = nil
+            end
+            
+            if g.Character then
+                RestoreClothes(g.Character)
+                for _, part in pairs(g.Character:GetChildren()) do
+                    if part:IsA("BasePart") and R15Parts[part.Name] then
+                        part.Material = Enum.Material.Plastic
+                        -- Восстанавливаем оригинальный цвет или используем стандартный
+                        if localHighlightData.original_colors[part.Name] then
+                            part.Color = localHighlightData.original_colors[part.Name]
+                        else
+                            -- Стандартные цвета для частей тела Roblox
+                            if part.Name:find("Hand") or part.Name:find("Foot") or part.Name == "Head" then
+                                part.Color = z(255, 204, 153)  -- Цвет кожи
+                            else
+                                part.Color = z(255, 204, 153)  -- Цвет кожи для всех частей
+                            end
+                        end
+                        -- Восстанавливаем прозрачность
+                        if part.Name ~= "HumanoidRootPart" then
+                            part.Transparency = 0
+                        end
                     end
                 end
             end
@@ -3757,42 +3911,31 @@ do -- Visuals Tab
                 localHighlightData.char_removing_conn:Disconnect()
             end
             
-            -- При удалении персонажа - очищаем highlight и восстанавливаем материалы
+            -- При удалении персонажа - очищаем highlight и очищаем сохраненные данные
             localHighlightData.char_removing_conn = localPlayer.CharacterRemoving:Connect(function(character)
                 cleanupLocalHighlight()
-                if K.Flags and K.Flags["self_material"] then
-                    restoreOriginalMaterials(character)
-                end
+                -- Очищаем сохраненные данные при удалении персонажа
+                localHighlightData.original_materials = {}
+                localHighlightData.original_colors = {}
             end)
             
             -- При добавлении персонажа - применяем все эффекты
             localHighlightData.char_added_conn = localPlayer.CharacterAdded:Connect(function(character)
-                -- Сохраняем оригинальные свойства
-                saveOriginalProperties(character)
+                -- Ждем немного чтобы персонаж полностью загрузился
+                task.wait(0.1)
                 
                 -- Применяем highlight если включен
                 if K.Flags and K.Flags["local_highlight"] then
                     applyLocalHighlight(character)
                     setupLocalDiedConnection(character)
                 end
-                
-                -- Применяем материал если включен
-                if K.Flags and K.Flags["self_material"] then
-                    applySelfMaterial(character)
-                end
             end)
             
             -- Если персонаж уже существует - применяем все эффекты сразу
             if localPlayer.Character then
-                saveOriginalProperties(localPlayer.Character)
-                
                 if K.Flags and K.Flags["local_highlight"] then
                     applyLocalHighlight(localPlayer.Character)
                     setupLocalDiedConnection(localPlayer.Character)
-                end
-                
-                if K.Flags and K.Flags["self_material"] then
-                    applySelfMaterial(localPlayer.Character)
                 end
             end
         end
@@ -3836,34 +3979,33 @@ do -- Visuals Tab
             Flag = "self_material",
             Callback = function(value)
                 if value then
-                    -- Если персонаж уже есть - сохраняем оригинальные свойства и применяем материал
-                    if g and g.Character then
-                        saveOriginalProperties(g.Character)
-                        applySelfMaterial(g.Character)
-                    end
-                    -- Привязываемся к игроку если еще не привязаны
-                    if not localHighlightData.char_added_conn then
-                        bindToLocalPlayer()
-                    end
+                    EnableSelfMaterial()
                 else
-                    -- Восстанавливаем оригинальные материалы
-                    if g and g.Character then
-                        restoreOriginalMaterials(g.Character)
-                    end
+                    DisableSelfMaterial()
                 end
             end
         })
         
-        -- Self Material Color Picker
+        -- Self Material Color Picker с прозрачностью
         _selfMaterialToggle:Colorpicker({
             Name = "Color",
             Default = z(255, 255, 255),
+            Alpha = 0,
             Flag = "self_material_color",
-            Callback = function(color)
+            Callback = function(color, alpha)
                 K.Flags["self_material_color"] = color
-                -- Обновляем цвет если Self Material активен
+                K.Flags["self_material_transparency"] = alpha or 0
+                -- Обновляем цвет и прозрачность если Self Material активен
                 if K.Flags["self_material"] and g and g.Character then
-                    applySelfMaterial(g.Character)
+                    -- Применяем новые цвет и прозрачность ко всем частям тела
+                    for _, part in pairs(g.Character:GetChildren()) do
+                        if part:IsA("BasePart") and R15Parts[part.Name] and part.Material == Enum.Material.ForceField then
+                            part.Color = color
+                            if part.Name ~= "HumanoidRootPart" then
+                                part.Transparency = alpha or 0
+                            end
+                        end
+                    end
                 end
             end
         })
