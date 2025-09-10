@@ -4421,6 +4421,88 @@ do -- Visuals Tab
         
     end
     
+    do -- Screen Section
+        local screenSection = N:Section({Name = "Screen", Side = 1})
+        
+        -- FOV система
+        local fov_state = {
+            enabled = false,
+            value = 70,
+            original_fov = nil,
+            connection = nil
+        }
+        
+        -- Функция применения FOV
+        local function applyFOV()
+            if not fov_state.enabled then
+                -- Восстанавливаем оригинальный FOV
+                if fov_state.original_fov and workspace.CurrentCamera then
+                    workspace.CurrentCamera.FieldOfView = fov_state.original_fov
+                end
+                
+                -- Отключаем соединение
+                if fov_state.connection then
+                    pcall(function()
+                        fov_state.connection:Disconnect()
+                    end)
+                    fov_state.connection = nil
+                end
+                return
+            end
+            
+            local camera = workspace.CurrentCamera
+            if not camera then
+                return
+            end
+            
+            -- Сохраняем оригинальный FOV при первом включении
+            if not fov_state.original_fov then
+                fov_state.original_fov = camera.FieldOfView
+            end
+            
+            -- Применяем новый FOV
+            camera.FieldOfView = fov_state.value
+            
+            -- Создаем соединение для постоянного применения FOV
+            if not fov_state.connection then
+                fov_state.connection = b.RenderStepped:Connect(function()
+                    if fov_state.enabled and camera then
+                        camera.FieldOfView = fov_state.value
+                    end
+                end)
+            end
+        end
+        
+        -- FOV Toggle
+        local _fovToggle = screenSection:Toggle({
+            Name = "FOV",
+            Flag = "fov_enabled",
+            Default = false,
+            Callback = function(value)
+                fov_state.enabled = value
+                applyFOV()
+            end
+        })
+        
+        -- FOV Slider
+        local _fovSlider = screenSection:Slider({
+            Name = "FOV Value",
+            Min = 60,
+            Max = 120,
+            Default = 70,
+            Decimals = 1,
+            Suffix = "°",
+            Flag = "fov_value",
+            Callback = function(value)
+                fov_state.value = value
+                if fov_state.enabled then
+                    applyFOV()
+                end
+            end
+        })
+        
+    end
+    
     do -- Stuff Section
         local stuffSection = N:Section({Name = "Stuff", Side = 2})
         
