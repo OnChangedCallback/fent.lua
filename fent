@@ -7468,6 +7468,139 @@ do -- Misc Tab
             }
         }
         
+        -- Fly utility
+        local fly_utility = {}
+        local fly_state = {
+            enabled = false,
+            active = false,
+            speed = 1,
+            connection = nil,
+            stepped_connection = nil
+        }
+        
+        -- NoClip utility function for fly
+        function fly_utility:setNoClip(character, state)
+            if not character then return end
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    if state then
+                        if not part:GetAttribute("OriginalCollision") then
+                            part:SetAttribute("OriginalCollision", part.CanCollide)
+                            part:SetAttribute("OriginalTouch", part.CanTouch)
+                            part:SetAttribute("OriginalQuery", part.CanQuery)
+                        end
+                        part.CanCollide, part.CanTouch, part.CanQuery = false, false, false
+                    else
+                        if part:GetAttribute("OriginalCollision") ~= nil then
+                            part.CanCollide = part:GetAttribute("OriginalCollision")
+                            part.CanTouch = part:GetAttribute("OriginalTouch") or true
+                            part.CanQuery = part:GetAttribute("OriginalQuery") or true
+                            part:SetAttribute("OriginalCollision", nil)
+                            part:SetAttribute("OriginalTouch", nil)
+                            part:SetAttribute("OriginalQuery", nil)
+                        end
+                    end
+                end
+            end
+        end
+        
+        function fly_utility:updateFly(character)
+            if fly_state.connection then 
+                fly_state.connection:Disconnect()
+                fly_state.connection = nil
+            end
+            if not character then return end
+            if not (fly_state.enabled and fly_state.active) then return end
+            
+            self:setNoClip(character, true)
+            
+            fly_state.connection = b.Stepped:Connect(function()
+                local char = g.Character
+                if not char then return end
+                self:setNoClip(char, true)
+                
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChild("Humanoid")
+                if not hrp or not hum then return end
+                
+                local speed = fly_state.speed * 50
+                local velocity = B(0, 0, 0)
+                
+                if c:IsKeyDown(Enum.KeyCode.Space) then 
+                    velocity = velocity + B(0, speed, 0)
+                end
+                if c:IsKeyDown(Enum.KeyCode.LeftControl) then 
+                    velocity = velocity + B(0, -speed, 0)
+                end
+                if c:IsKeyDown(Enum.KeyCode.W) then 
+                    velocity = velocity + (cam.CFrame.LookVector * speed)
+                end
+                if c:IsKeyDown(Enum.KeyCode.S) then 
+                    velocity = velocity + (cam.CFrame.LookVector * -speed)
+                end
+                if c:IsKeyDown(Enum.KeyCode.D) then 
+                    velocity = velocity + (cam.CFrame.RightVector * speed)
+                end
+                if c:IsKeyDown(Enum.KeyCode.A) then 
+                    velocity = velocity + (cam.CFrame.RightVector * -speed)
+                end
+                
+                hrp.Velocity = velocity
+                hum:ChangeState("Freefall")
+            end)
+        end
+        
+        function fly_utility:stopFly()
+            if fly_state.connection then 
+                fly_state.connection:Disconnect()
+                fly_state.connection = nil
+            end
+            
+            local char = g.Character
+            self:setNoClip(char, false)
+            
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChild("Humanoid")
+                if hrp then
+                    hrp.Velocity = B(0, -2, 0)
+                    local tmp
+                    tmp = b.Stepped:Connect(function()
+                        if not hrp or not hrp.Parent then 
+                            tmp:Disconnect()
+                            return
+                        end
+                        hrp.Velocity = B(0, hrp.Velocity.Y, 0)
+                        tmp:Disconnect()
+                    end)
+                end
+                if hum then 
+                    hum:ChangeState("Landing")
+                end
+            end
+        end
+        
+        function fly_utility:enable()
+            fly_state.enabled = true
+            fly_state.active = true
+            if g.Character then
+                self:updateFly(g.Character)
+            end
+        end
+        
+        function fly_utility:disable()
+            fly_state.enabled = false
+            fly_state.active = false
+            self:stopFly()
+        end
+        
+        function fly_utility:setSpeed(value)
+            local num = tonumber(value)
+            if num then
+                fly_state.speed = math.clamp(num, 0.1, 100)
+            end
+        end
+        
         function speed_utility:updateCharacter(character)
             if not character then return end
             
@@ -7520,9 +7653,12 @@ do -- Misc Tab
             if speed_state.enabled then
                 speed_utility:updateCharacter(char)
             end
+            if fly_state.enabled then
+                fly_utility:updateFly(char)
+            end
         end)
         
-        -- UI Elements
+        -- Speed UI Elements
         local SpeedToggle = MovementSection:Toggle({
             Name = "Speed",
             Flag = "SpeedEnabled",
@@ -7555,6 +7691,48 @@ do -- Misc Tab
             Callback = function()
                 if speed_state.enabled then
                     speed_state.active = not speed_state.active
+                end
+            end
+        })
+        
+        -- Fly UI Elements
+        local FlyToggle = MovementSection:Toggle({
+            Name = "Fly",
+            Flag = "FlyEnabled",
+            Default = false,
+            Callback = function(value)
+                if value then
+                    fly_utility:enable()
+                else
+                    fly_utility:disable()
+                end
+            end
+        })
+        
+        local FlyTextbox = MovementSection:Textbox({
+            Name = "Fly Speed",
+            Default = "1",
+            Placeholder = "Enter fly speed...",
+            Flag = "FlySpeed",
+            Callback = function(value)
+                fly_utility:setSpeed(value)
+            end
+        })
+        
+        -- Fly Keybind
+        FlyToggle:Keybind({
+            Name = "Fly Key",
+            Mode = "Toggle",
+            Default = Enum.KeyCode.F,
+            Flag = "FlyKey",
+            Callback = function()
+                if fly_state.enabled then
+                    fly_state.active = not fly_state.active
+                    if fly_state.active then
+                        fly_utility:updateFly(g.Character)
+                    else
+                        fly_utility:stopFly()
+                    end
                 end
             end
         })
