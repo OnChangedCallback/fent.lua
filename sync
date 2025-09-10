@@ -17,8 +17,9 @@ local r, s = table.sort, table.concat
 local t, u = string.format, string.match
 local v, w = string.lower, string.upper
 local x, y = string.sub, string.gsub
-local pairs, ipairs = pairs, ipairs
+local ipairs = ipairs
 local type, tostring = type, tostring
+local typeof = typeof
 local pcall, xpcall = pcall, xpcall
 local loadstring = loadstring
 local setmetatable = setmetatable
@@ -27,6 +28,8 @@ local z = Color3.fromRGB
 local A = UDim2.new
 local B = Vector3.new
 local C = CFrame.new
+local replicated_storage = game:GetService("ReplicatedStorage")
+local main_remote = replicated_storage.MainRemotes:WaitForChild("MainRemoteEvent")
 local isfolder = isfolder
 local isfile = isfile
 local listfiles = listfiles
@@ -40,15 +43,175 @@ local cam = workspace.CurrentCamera
 local Vector2 = Vector2
 local Instance = Instance
 local ColorSequence = ColorSequence
+local ColorSequenceKeypoint = ColorSequenceKeypoint
 local NumberSequence = NumberSequence
+local NumberSequenceKeypoint = NumberSequenceKeypoint
+local NumberRange = NumberRange
 local Enum = Enum
 local hookmetamethod = hookmetamethod
 local checkcaller = checkcaller
 local newcclosure = newcclosure
 local getgenv = getgenv
-local task = task
-local wait = wait
+local task = task or {}
+local wait = wait or function(t) return task.wait(t) end
 local fireclickdetector = fireclickdetector
+local getconnections = getconnections
+local debug = debug
+
+repeat wait() until game:IsLoaded()
+
+-- Предварительная загрузка звуков с таймаутом
+local availableSounds = {}
+local soundsLoaded = false
+
+local function createSoundsFolder()
+    if not isfolder("FentSounds") then
+        makefolder("FentSounds")
+    end
+end
+
+local function downloadSoundWithTimeout(fileName, downloadUrl, timeout)
+    local soundPath = "FentSounds/" .. fileName
+    
+    if isfile(soundPath) then
+        return true
+    end
+    
+    local startTime = tick()
+    local success = false
+    
+    spawn(function()
+        local downloadSuccess, soundData = pcall(function()
+            return game:HttpGet(downloadUrl)
+        end)
+        
+        if downloadSuccess and soundData then
+            writefile(soundPath, soundData)
+            success = true
+        end
+    end)
+    
+    -- Ждем загрузки с таймаутом
+    while (tick() - startTime) < timeout and not success do
+        wait(0.1)
+    end
+    
+    return success
+end
+
+local function fetchAndDownloadSounds()
+    createSoundsFolder()
+    local sounds = {}
+    local totalSounds = 0
+    local loadedSounds = 0
+    
+    print("[Fentanyl] Загрузка списка звуков из репозиториев...")
+    
+    -- Источник 1: OnChangedCallback/sounds
+    local success1, response1 = pcall(function()
+        return game:HttpGet("https://api.github.com/repos/OnChangedCallback/sounds/contents/main")
+    end)
+    
+    if success1 then
+        local jsonSuccess1, data1 = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(response1)
+        end)
+        
+        if jsonSuccess1 and type(data1) == "table" then
+            for _, file in ipairs(data1) do
+                if file.name and file.name:match("%.wav$") then
+                    local fileName = file.name:gsub("%.wav$", "")
+                    table.insert(sounds, {
+                        name = fileName, 
+                        url = file.download_url, 
+                        fullName = file.name,
+                        source = "OnChangedCallback"
+                    })
+                    totalSounds = totalSounds + 1
+                end
+            end
+        end
+    end
+    
+    -- Источник 2: f1nobe7650/Nebula
+    local success2, response2 = pcall(function()
+        return game:HttpGet("https://api.github.com/repos/f1nobe7650/Nebula/contents/Sounds")
+    end)
+    
+    if success2 then
+        local jsonSuccess2, data2 = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(response2)
+        end)
+        
+        if jsonSuccess2 and type(data2) == "table" then
+            for _, file in ipairs(data2) do
+                if file.name and (file.name:match("%.wav$") or file.name:match("%.mp3$") or file.name:match("%.ogg$")) then
+                    local fileName = file.name:gsub("%.%w+$", "")
+                    -- Добавляем префикс для различения источников
+                    table.insert(sounds, {
+                        name = "Nebula_" .. fileName, 
+                        url = "https://github.com/f1nobe7650/Nebula/raw/refs/heads/main/Sounds/" .. file.name, 
+                        fullName = "Nebula_" .. file.name,
+                        source = "Nebula"
+                    })
+                    totalSounds = totalSounds + 1
+                end
+            end
+        end
+    end
+    
+    print("[Fentanyl] Найдено " .. totalSounds .. " звуков из " .. (success1 and "OnChangedCallback" or "") .. (success1 and success2 and " + " or "") .. (success2 and "Nebula" or "") .. ". Начинаю загрузку...")
+    
+    -- Загружаем каждый звук с таймаутом 10 секунд
+    for i, sound in ipairs(sounds) do
+        print("[Fentanyl] Загрузка " .. i .. "/" .. totalSounds .. ": " .. sound.name .. " (" .. sound.source .. ")")
+        
+        local downloaded = downloadSoundWithTimeout(sound.fullName, sound.url, 10)
+        
+        if downloaded then
+            loadedSounds = loadedSounds + 1
+            print("[Fentanyl] ✓ Загружен: " .. sound.name)
+        else
+            print("[Fentanyl] ✗ Пропущен (таймаут): " .. sound.name)
+        end
+    end
+    
+    -- Оставляем только загруженные звуки
+    local finalSounds = {}
+    for _, sound in ipairs(sounds) do
+        if isfile("FentSounds/" .. sound.fullName) then
+            table.insert(finalSounds, sound.name)
+        end
+    end
+    
+    -- Fallback если оба API недоступны
+    if #finalSounds == 0 then
+        print("[Fentanyl] API недоступны, используем fallback звуки")
+        for i = 1, 20 do
+            table.insert(finalSounds, tostring(i))
+        end
+    end
+    
+    print("[Fentanyl] Загрузка звуков завершена: " .. loadedSounds .. "/" .. totalSounds)
+    return finalSounds
+end
+
+-- Загружаем звуки и ждем завершения
+spawn(function()
+    availableSounds = fetchAndDownloadSounds()
+    soundsLoaded = true
+    print("[Fentanyl] Все звуки обработаны, можно инициализировать UI")
+end)
+
+-- Ждем завершения загрузки звуков
+print("[Fentanyl] Ожидание загрузки звуков...")
+while not soundsLoaded do
+    wait(0.5)
+end
+
+-- Circle rendering variables
+local tick = tick
+local Drawing = Drawing
 local E = {}
 local F = {}
 do
@@ -126,7 +289,359 @@ do -- Targeting Framework
             return (Tool ~= "None" and Tool.Handle and Tool.Handle.Position) or cam.CFrame.Position
         end
         
+        -- Force Hit utility functions
+        function utility:isPlayerKO(player)
+            if not player or not player.Character then return false end
+            
+            -- Проверяем K.O статус через BodyEffects
+            local success, isKO = pcall(function()
+                local playerInWorkspace = workspace.Players:FindFirstChild(player.Name)
+                if playerInWorkspace and playerInWorkspace:FindFirstChild("BodyEffects") then
+                    local koEffect = playerInWorkspace.BodyEffects:FindFirstChild("K.O")
+                    if koEffect and koEffect:FindFirstChild("Value") then
+                        return koEffect.Value.Value == true
+                    end
+                end
+                return false
+            end)
+            
+            if success then
+                return isKO
+            end
+            
+            -- Fallback к проверке здоровья если BodyEffects недоступны
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            return humanoid and humanoid.Health <= 0
+        end
+        
+        function utility:isPlayerGrabbed(player)
+            if not player or not player.Character then return false end
+            -- Проверяем, схвачен ли игрок
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                return humanoid.PlatformStand or false
+            end
+            return false
+        end
+        
+        function utility:hasForceField(player)
+            if not player or not player.Character then return false end
+            return player.Character:FindFirstChildOfClass("ForceField") ~= nil
+        end
+        
+        function utility:performForceHit(targetPlayer)
+            if not targetPlayer or not targetPlayer.Character then 
+                return false 
+            end
+            
+            -- Проверяем K.O статус цели перед выстрелом
+            if self:isPlayerKO(targetPlayer) then
+                return false
+            end
+            
+            local character = g.Character
+            if not character then 
+                return false 
+            end
+            
+            local tool = character:FindFirstChildOfClass("Tool")
+            if not tool or not tool:FindFirstChild("Handle") then 
+                return false 
+            end
+            
+            local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local targetHead = targetPlayer.Character:FindFirstChild("Head")
+            if not targetHRP or not targetHead then 
+                return false 
+            end
+            
+            -- Получаем RemoteEvent оружия
+            local toolRemote = tool:FindFirstChild("RemoteEvent")
+            if not toolRemote then
+                return false
+            end
+            
+            -- Получаем MainRemoteEvent
+            local replicatedStorage = game:GetService("ReplicatedStorage")
+            local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
+            if not mainRemotes then
+                return false
+            end
+            
+            local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
+            if not mainRemoteEvent then
+                return false
+            end
+            
+            -- Выполняем последовательность выстрела как в оригинальном скрипте
+            local origin = tool.Handle.Position
+            
+            -- 1. Сначала отправляем "Shoot" через RemoteEvent оружия
+            local success1 = pcall(function()
+                toolRemote:FireServer("Shoot")
+            end)
+            if not success1 then
+                return false
+            end
+            
+            -- 2. Отправляем основной выстрел через MainRemoteEvent
+            local success2 = pcall(function()
+                mainRemoteEvent:FireServer(
+                    "ShootGun",
+                    tool.Handle,
+                    origin,
+                    targetHRP.Position,
+                    targetHead,
+                    B(0, 0, -1) -- Vector3.zAxis как в оригинале
+                )
+            end)
+            if not success2 then
+                return false
+            end
+            
+            -- 3. Завершаем выстрел
+            local success3 = pcall(function()
+                toolRemote:FireServer()
+            end)
+            if not success3 then
+                return false
+            end
+            
+            return success2
+        end
+        
+        -- HitChams utility functions
+        function utility:createHitChams(player)
+            if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+                return
+            end
+            
+            -- Получаем настройки цвета, прозрачности и материала из UI
+            local uiLib = _G.FentanylUI
+            local chamsColor = (uiLib and uiLib.Flags and uiLib.Flags["hit_chams_color"]) or z(255, 0, 0)
+            local chamsAlpha = (uiLib and uiLib.Flags and uiLib.Flags["hit_chams_alpha"]) or 0.0
+            local chamsMaterial = (uiLib and uiLib.Flags and uiLib.Flags["hit_chams_material"]) or "Neon"
+            
+            player.Character.Archivable = true
+            local cloned = player.Character:Clone()
+            cloned.Name = "HitChams_Clone"
+            
+            local bodyParts = {
+                "Head", "UpperTorso", "LowerTorso",
+                "LeftUpperArm", "LeftLowerArm", "LeftHand",
+                "RightUpperArm", "RightLowerArm", "RightHand",
+                "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+                "RightUpperLeg", "RightLowerLeg", "RightFoot"
+            }
+            
+            -- Удаляем ненужные части
+            for _, part in ipairs(cloned:GetChildren()) do
+                if part:IsA("BasePart") then
+                    local partValid = false
+                    for _, validPart in ipairs(bodyParts) do
+                        if part.Name == validPart then
+                            partValid = true
+                            break
+                        end
+                    end
+                    
+                    if not partValid then
+                        part:Destroy()
+                    end
+                elseif part:IsA("Accessory") or part:IsA("Tool") or part.Name == "face" or 
+                       part:IsA("Shirt") or part:IsA("Pants") or part:IsA("Hat") then
+                    part:Destroy()
+                end
+            end
+            
+            -- Удаляем Humanoid
+            if cloned:FindFirstChild("Humanoid") then
+                cloned.Humanoid:Destroy()
+            end
+            
+            -- Настраиваем части тела с пользовательскими настройками
+            for _, bodyPart in ipairs(cloned:GetChildren()) do
+                if bodyPart:IsA("BasePart") then
+                    bodyPart.CanCollide = false
+                    bodyPart.Anchored = true
+                    bodyPart.Transparency = chamsAlpha
+                    bodyPart.Color = chamsColor
+                    bodyPart.Material = Enum.Material[chamsMaterial]
+                end
+            end
+            
+            -- Настраиваем голову отдельно с пользовательскими настройками
+            if cloned:FindFirstChild("Head") then
+                local head = cloned.Head
+                head.Transparency = chamsAlpha
+                head.Color = chamsColor
+                head.Material = Enum.Material[chamsMaterial]
+                
+                if head:FindFirstChild("face") then
+                    head.face:Destroy()
+                end
+            end
+            
+            cloned.Parent = workspace
+            
+            -- Создаем tween для исчезновения
+            local tweenInfo = TweenInfo.new(
+                2, -- duration
+                Enum.EasingStyle.Sine,
+                Enum.EasingDirection.InOut,
+                0,
+                true
+            )
+            
+            for _, bodyPart in ipairs(cloned:GetChildren()) do
+                if bodyPart:IsA("BasePart") then
+                    local tween = d:Create(bodyPart, tweenInfo, { Transparency = 1 })
+                    tween:Play()
+                end
+            end
+            
+            -- Удаляем клон через заданное время
+            task.delay(2, function()
+                if cloned and cloned.Parent then
+                    cloned:Destroy()
+                end
+            end)
+        end
+        
+        -- HitSounds utility functions
+        function utility:createSoundsFolder()
+            if not isfolder("FentSounds") then
+                makefolder("FentSounds")
+            end
+        end
+        
+        function utility:downloadHitSound(soundName)
+            self:createSoundsFolder()
+            
+            -- Проверяем, это звук из Nebula или OnChangedCallback
+            if soundName:match("^Nebula_") then
+                -- Звук из Nebula репозитория
+                local actualFileName = soundName:gsub("^Nebula_", "")
+                local soundPath = "FentSounds/" .. soundName
+                
+                -- Проверяем все возможные расширения для Nebula
+                local extensions = {".wav", ".mp3", ".ogg"}
+                for _, ext in ipairs(extensions) do
+                    local fullPath = soundPath .. ext
+                    if isfile(fullPath) then
+                        return fullPath
+                    end
+                end
+                
+                -- Если файл не найден, пытаемся загрузить
+                for _, ext in ipairs(extensions) do
+                    local fullPath = soundPath .. ext
+                    local success, soundData = pcall(function()
+                        return game:HttpGet("https://github.com/f1nobe7650/Nebula/raw/refs/heads/main/Sounds/" .. actualFileName .. ext)
+                    end)
+                    
+                    if success and soundData and #soundData > 0 then
+                        writefile(fullPath, soundData)
+                        return fullPath
+                    end
+                end
+                
+                return nil
+            else
+                -- Звук из OnChangedCallback репозитория
+                local soundPath = "FentSounds/" .. soundName .. ".wav"
+                
+                if isfile(soundPath) then
+                    return soundPath
+                end
+                
+                local success, soundData = pcall(function()
+                    return game:HttpGet("https://github.com/OnChangedCallback/sounds/raw/main/main/" .. soundName .. ".wav")
+                end)
+                
+                if success and soundData then
+                    writefile(soundPath, soundData)
+                    return soundPath
+                else
+                    return nil
+                end
+            end
+        end
+        
+        function utility:playHitSound()
+            local uiLib = _G.FentanylUI
+            if not (uiLib and uiLib.Flags and uiLib.Flags["hit_sounds"]) then
+                return
+            end
+            
+            local volume = (uiLib.Flags["hit_sounds_volume"]) or 0.5
+            local pitch = (uiLib.Flags["hit_sounds_pitch"]) or 1.0
+            local soundSelection = (uiLib.Flags["hit_sounds_selection"]) or (availableSounds[1] or "1")
+            
+            local soundPath = self:downloadHitSound(soundSelection)
+            
+            if soundPath and isfile(soundPath) then
+                local sound = Instance.new("Sound")
+                sound.Volume = volume
+                sound.PlaybackSpeed = pitch
+                
+                -- Используем правильный метод для локальных файлов
+                local success, customAsset = pcall(function()
+                    if getsynasset then
+                        return getsynasset(soundPath)
+                    elseif getcustomasset then
+                        return getcustomasset(soundPath)
+                    else
+                        return "rbxassetid://6565367558" -- Fallback
+                    end
+                end)
+                
+                if success and customAsset then
+                    sound.SoundId = customAsset
+                    sound.Parent = workspace
+                    
+                    sound:Play()
+                    
+                    -- Удаляем звук после проигрывания
+                    sound.Ended:Connect(function()
+                        sound:Destroy()
+                    end)
+                end
+            end
+        end
+        
         TargetingFramework.utility = utility
+    end
+    
+    do -- Circle Utility Functions
+        local circle_utility = {}
+        
+        function circle_utility.lerp(a, b, t)
+            return a + (b - a) * t
+        end
+        
+        function circle_utility.lerp_color(a, b, t)
+            return z(
+                circle_utility.lerp(a.R * 255, b.R * 255, t),
+                circle_utility.lerp(a.G * 255, b.G * 255, t),
+                circle_utility.lerp(a.B * 255, b.B * 255, t)
+            )
+        end
+        
+        function circle_utility.custom_gradient(t, time, c1, c2, c3, c4, speed)
+            local tt = (t + (time * speed)) % 1
+            if tt < 0.25 then
+                return circle_utility.lerp_color(c1, c2, tt / 0.25)
+            elseif tt < 0.5 then
+                return circle_utility.lerp_color(c2, c3, (tt - 0.25) / 0.25)
+            elseif tt < 0.75 then
+                return circle_utility.lerp_color(c3, c4, (tt - 0.5) / 0.25)
+            else
+                return circle_utility.lerp_color(c4, c1, (tt - 0.75) / 0.25)
+            end
+        end
+        
+        TargetingFramework.circle_utility = circle_utility
     end
     
     do -- Core Framework Functions
@@ -148,14 +663,26 @@ do -- Targeting Framework
             local closestPlayer, closestDistance = nil, nil
             for _, player in ipairs(a:GetPlayers()) do
                 if player ~= g and self.utility:ValidateClient(player) then
-                    local character = player.Character
-                    local targetPart = self.utility:GetPreferredPart(character)
-                    if targetPart then
-                        local screenPos, onScreen = self.utility:ToScreen(targetPart.Position)
-                        if onScreen then
-                            local distance = self.utility:GetMouseDistance(screenPos)
-                            if not closestDistance or distance < closestDistance then
-                                closestPlayer, closestDistance = player, distance
+                    -- Проверяем KO check если включен
+                    local uiLib = _G.FentanylUI
+                    local skipPlayer = false
+                    if uiLib and uiLib.Flags and uiLib.Flags["KOCheckEnabled"] then
+                        if self.utility:isPlayerKO(player) then
+                            -- Пропускаем KO игроков при выборе новой цели
+                            skipPlayer = true
+                        end
+                    end
+                    
+                    if not skipPlayer then
+                        local character = player.Character
+                        local targetPart = self.utility:GetPreferredPart(character)
+                        if targetPart then
+                            local screenPos, onScreen = self.utility:ToScreen(targetPart.Position)
+                            if onScreen then
+                                local distance = self.utility:GetMouseDistance(screenPos)
+                                if not closestDistance or distance < closestDistance then
+                                    closestPlayer, closestDistance = player, distance
+                                end
                             end
                         end
                     end
@@ -256,6 +783,15 @@ do -- Targeting Framework
             else
                 local closestTarget, _distance = TargetingFramework:GetClosestToMouse()
                 if closestTarget then
+                    -- Дополнительная проверка KO для выбранной цели
+                    local uiLib = _G.FentanylUI
+                    if uiLib and uiLib.Flags and uiLib.Flags["KOCheckEnabled"] then
+                        if TargetingFramework.utility:isPlayerKO(closestTarget) then
+                            -- Не выбираем KO игрока
+                            return
+                        end
+                    end
+                    
                     targeting_state.current = closestTarget
                     TargetingFramework:SetTargetInfo(closestTarget)
                     TargetingFramework:SetCurrentTarget(closestTarget)
@@ -274,13 +810,31 @@ do -- Targeting Framework
             end
             
             TargetingFramework._dd.conn = b.Heartbeat:Connect(function()
-                -- Проверяем включен ли таргетинг
-                if not K or not K.Flags or not K.Flags["TargetingEnabled"] then
+                -- Проверяем включен ли таргетинг ИЛИ OnDamage уведомления
+                -- Проверяем через _G чтобы избежать ошибок с порядком инициализации
+                local uiLib = _G.FentanylUI
+                if not uiLib or not uiLib.Flags then
+                    return
+                end
+                
+                -- Если ни таргетинг, ни OnDamage не включены, выходим
+                local targetingEnabled = uiLib.Flags["TargetingEnabled"]
+                local onDamageEnabled = uiLib.Flags["NotifyOnDamage"]
+                
+                if not targetingEnabled and not onDamageEnabled then
                     return
                 end
                 
                 local dd = TargetingFramework._dd
                 local currentTarget = dd.override_player or (targeting_state and targeting_state.current or nil)
+                
+                -- Если есть OnDamage, но нет цели, пытаемся найти ближайшую
+                if not currentTarget and onDamageEnabled then
+                    local closestTarget, _distance = TargetingFramework:GetClosestToMouse()
+                    if closestTarget then
+                        currentTarget = closestTarget
+                    end
+                end
                 
                 if currentTarget ~= dd.last_target then
                     dd.last_target = currentTarget
@@ -319,6 +873,7 @@ do -- Targeting Framework
                         b.Heartbeat:Wait()
                         dd.hum_conn = dd.hum.HealthChanged:Connect(function(newHealth)
                             local maxHealth = dd.hum and dd.hum.MaxHealth or 0
+                            
                             if dd.last_health == nil or dd.last_max == nil or maxHealth ~= dd.last_max then
                                 dd.last_health = newHealth
                                 dd.last_max = maxHealth
@@ -327,13 +882,16 @@ do -- Targeting Framework
                             
                             if newHealth < dd.last_health then
                                 local damage = dd.last_health - newHealth
-                                TargetingFramework:_emit_hit({
+                                
+                                local hitInfo = {
                                     player = currentTarget,
                                     damage = damage,
                                     health = newHealth,
                                     maxHealth = maxHealth,
                                     time = os.clock()
-                                })
+                                }
+                                
+                                TargetingFramework:_emit_hit(hitInfo)
                             end
                             
                             dd.last_health = newHealth
@@ -358,6 +916,11 @@ do -- Targeting Framework
         
         -- Запускаем только если нужно
         TargetingFramework.StartHealthDetection = StartHealthDetection
+        
+        -- Добавляем метод для проверки статуса
+        function TargetingFramework:IsHealthDetectionActive()
+            return self._dd.conn ~= nil
+        end
     end
     
     _G.TargetingFramework = TargetingFramework
@@ -497,6 +1060,7 @@ do -- Desync Framework
     end
 
     local DesyncLibrary = {}
+    
 
     function DesyncLibrary.movedesyncto(arg1, arg2, arg3)
         local targetCF = parseCFrame(arg1, arg2, arg3)
@@ -524,8 +1088,9 @@ do -- Desync Framework
     end
 
     function DesyncLibrary.SynchronizeSyncWithPlayer()
+        -- Безопасная проверка без ошибки
         if not desync_utility:ValidateClient(g) then
-            error("SynchronizeSyncWithPlayer: player not ready")
+            return nil -- Просто возвращаем nil вместо ошибки
         end
         state.targetCFrame = nil
         state.followMode = true
@@ -554,6 +1119,7 @@ do -- Desync Framework
     function DesyncLibrary.IsEnabled()
         return state.enabled
     end
+    
 
     pcall(function()
         getgenv().DesyncLibrary = DesyncLibrary
@@ -561,65 +1127,12 @@ do -- Desync Framework
     _G.DesyncLibrary = DesyncLibrary
 end
 
-do -- Hide Framework
-    local HideFramework = {}
-    local _hideConnection = nil
-    local isHiding = false
-    
-    -- Utility функция для генерации случайных координат в пределах бесконечности
-    local function generateRandomCoords()
-        local maxRange = i -- math.huge
-        local randomX = (h() - 0.5) * 2 * maxRange -- Случайное число от -math.huge до math.huge
-        local randomZ = (h() - 0.5) * 2 * maxRange -- Случайное число от -math.huge до math.huge
-        local voidY = -i -- -math.huge для войдинга
-        
-        return B(randomX, voidY, randomZ)
-    end
-    
-    function HideFramework.start()
-        if isHiding then return end
-        
-        isHiding = true
-        
-        if getgenv().DesyncLibrary then
-            -- Генерируем случайные координаты для войдинга
-            local hidePosition = generateRandomCoords()
-            
-            -- Используем DesyncLibrary для перемещения в войд
-            getgenv().DesyncLibrary.movedesyncto(hidePosition)
-            
-            -- K:Notification("Hide enabled - moved to void", 2, z(255, 165, 0))
-            print("[Hide] Hide enabled - moved to void")
-        else
-            -- K:Notification("DesyncLibrary not found!", 2, z(255, 0, 0))
-            print("[Hide] DesyncLibrary not found!")
-        end
-    end
-    
-    function HideFramework.stop()
-        if not isHiding then return end
-        
-        isHiding = false
-        
-        if getgenv().DesyncLibrary then
-            -- Синхронизируемся обратно с игроком
-            getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
-            
-            -- K:Notification("Hide disabled - synced with player", 2, z(0, 255, 0))
-            print("[Hide] Hide disabled - synced with player")
-        end
-    end
-    
-    function HideFramework.isEnabled()
-        return isHiding
-    end
-    
-    -- Экспорт в глобальную область
-    _G.HideFramework = HideFramework
-end
-
 local K =
     loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/library"))()
+
+-- Сохраняем UI библиотеку в _G для доступа из других частей кода
+_G.FentanylUI = K
+
 local L =
     K:Window(
     {
@@ -635,8 +1148,7 @@ local L =
     }
 )
 local M = L:Page({Name = "Ragebot", Columns = 2})
--- Неиспользуемые вкладки (закомментированы для оптимизации)
--- local N = L:Page({Name = "Visuals", Columns = 2})
+local N = L:Page({Name = "Visuals", Columns = 2})
 -- local O = L:Page({Name = "Misc", Columns = 2})
 -- local P = L:Page({Name = "AntiAim", Columns = 2})
 
@@ -743,6 +1255,53 @@ do -- Ragebot Tab
         })
     end
     
+    do -- Gun Section
+        local gunSection = M:Section({Name = "Gun", Side = 1})
+        
+        local _rapidFireToggle = gunSection:Toggle({
+            Name = "Rapid Fire",
+            Default = false,
+            Flag = "RapidFireEnabled",
+            Callback = function(enabled)
+                if _G.RapidFireFramework then
+                    _G.RapidFireFramework.setEnabled(enabled)
+                end
+            end
+        })
+        
+        local _infinityAmmoToggle = gunSection:Toggle({
+            Name = "Infinity Ammo (maypatched)",
+            Default = false,
+            Flag = "InfinityAmmoEnabled",
+            Callback = function(enabled)
+                if _G.InfinityAmmoFramework then
+                    _G.InfinityAmmoFramework.setEnabled(enabled)
+                end
+            end
+        })
+        
+        local _infinityRangeToggle = gunSection:Toggle({
+            Name = "Infinity Range",
+            Default = false,
+            Flag = "InfinityRangeEnabled",
+            Callback = function(enabled)
+                if _G.InfinityRangeFramework then
+                    _G.InfinityRangeFramework.setEnabled(enabled)
+                end
+            end
+        })
+        
+        local _autoReloadToggle = gunSection:Toggle({
+            Name = "AutoReload",
+            Default = false,
+            Flag = "AutoReloadEnabled",
+            Callback = function(enabled)
+                if _G.AutoReloadFramework then
+                    _G.AutoReloadFramework.setEnabled(enabled)
+                end
+            end
+        })
+    end
     
     do -- Notify Section
         local aT = M:Section({Name = "Notify", Side = 2})
@@ -761,6 +1320,68 @@ do -- Ragebot Tab
             Flag = "NotifyOnDamage",
             Callback = function(aX)
                 -- Callback будет обработан через targeting framework
+            end
+        })
+    end
+    
+    do -- Checks Section
+        local checksSection = M:Section({Name = "Checks", Side = 2})
+        
+        local _koCheckToggle = checksSection:Toggle({
+            Name = "KO Check",
+            Default = false,
+            Flag = "KOCheckEnabled",
+            Callback = function(enabled)
+                -- Callback будет обработан через targeting framework
+            end
+        })
+    end
+    
+    do -- Exploits Section
+        local exploitsSection = M:Section({Name = "Exploits", Side = 2})
+        
+        local _forceHitToggle = exploitsSection:Toggle({
+            Name = "Magic Bullets",
+            Default = false,
+            Flag = "ForceHitEnabled",
+            Callback = function(enabled)
+                if _G.ForceHitFramework then
+                    if enabled then
+                        _G.ForceHitFramework.start()
+                    else
+                        _G.ForceHitFramework.stop()
+                    end
+                end
+            end
+        })
+        
+        local _wallbangToggle = exploitsSection:Toggle({
+            Name = "Wallbang",
+            Default = false,
+            Flag = "WallbangEnabled",
+            Callback = function(enabled)
+                if _G.WallbangFramework then
+                    if enabled then
+                        _G.WallbangFramework.start()
+                    else
+                        _G.WallbangFramework.stop()
+                    end
+                end
+            end
+        })
+        
+        local _noSpreadToggle = exploitsSection:Toggle({
+            Name = "NoSpread",
+            Default = false,
+            Flag = "NoSpreadEnabled",
+            Callback = function(enabled)
+                if _G.NoSpreadFramework then
+                    if enabled then
+                        _G.NoSpreadFramework.start()
+                    else
+                        _G.NoSpreadFramework.stop()
+                    end
+                end
             end
         })
     end
@@ -788,15 +1409,32 @@ do -- Ragebot Tab
             end
         })
         
-        local _hideToggle = desyncSection:Toggle({
+        local _autoStompToggle = desyncSection:Toggle({
+            Name = "Auto Stomp",
+            Default = false,
+            Flag = "AutoStompEnabled",
+            Callback = function(enabled)
+                if _G.AutoStompFramework then
+                    if enabled then
+                        _G.AutoStompFramework.start()
+                    else
+                        _G.AutoStompFramework.stop()
+                    end
+                end
+            end
+        })
+        
+        desyncSection:Toggle({
             Name = "Hide",
             Default = false,
             Flag = "HideEnabled",
             Callback = function(enabled)
-                if enabled then
-                    _G.HideFramework.start()
-                else
-                    _G.HideFramework.stop()
+                if _G.HideFramework then
+                    if enabled then
+                        _G.HideFramework.start()
+                    else
+                        _G.HideFramework.stop()
+                    end
                 end
             end
         })
@@ -818,6 +1456,16 @@ do -- Ragebot Tab
                 if K.Flags["NotifyOnDamage"] and hitInfo then
                     local damageText = t("%.1f damage to %s", hitInfo.damage, hitInfo.player.Name)
                     K:Notification(damageText, 2, z(255, 100, 100))
+                end
+                
+                -- Trigger HitChams when damage is detected
+                if K.Flags["hit_chams"] and hitInfo and _G.HitChamsFramework then
+                    _G.HitChamsFramework:TriggerHitChams(hitInfo.player)
+                end
+                
+                -- Play HitSound when damage is detected
+                if K.Flags["hit_sounds"] and hitInfo and _G.TargetingFramework and _G.TargetingFramework.utility then
+                    _G.TargetingFramework.utility:playHitSound()
                 end
             end)
         end
@@ -899,6 +1547,686 @@ do -- Ragebot Tab
         end)
         
         _G.AimbotFramework = AimbotFramework
+    end
+    
+    do -- Force Hit Framework
+        local ForceHitFramework = {
+            enabled = false,
+            connection = nil,
+            shootDelay = 0.1, -- Задержка между выстрелами
+            lastShotTime = 0
+        }
+        
+        function ForceHitFramework.start()
+            if ForceHitFramework.connection then
+                return
+            end
+            
+            ForceHitFramework.enabled = true
+            
+            ForceHitFramework.connection = E.new_connection(b.Heartbeat, function()
+                if not ForceHitFramework.enabled then
+                    return
+                end
+                
+                -- Проверяем, есть ли текущая цель
+                if not _G.targeting_state or not _G.targeting_state.current then
+                    return
+                end
+                
+                local currentTarget = _G.targeting_state.current
+                if not currentTarget or not currentTarget.Character then
+                    return
+                end
+                
+                -- Проверяем задержку между выстрелами
+                local now = os.clock()
+                if now - ForceHitFramework.lastShotTime < ForceHitFramework.shootDelay then
+                    return
+                end
+                
+                -- Проверяем, есть ли у нас оружие
+                local character = g.Character
+                if not character then
+                    return
+                end
+                
+                local tool = character:FindFirstChildOfClass("Tool")
+                if not tool or not tool:FindFirstChild("Handle") then
+                    return
+                end
+                
+                -- Проверяем состояние цели
+                local utility = _G.TargetingFramework and _G.TargetingFramework.utility
+                if not utility then
+                    return
+                end
+                
+                local isKO = utility:isPlayerKO(currentTarget)
+                local _isGrabbed = utility:isPlayerGrabbed(currentTarget)
+                local hasFF = utility:hasForceField(currentTarget)
+                
+                -- Если цель в невалидном состоянии, пропускаем
+                if isKO or hasFF then
+                    return
+                end
+                
+                -- Проверяем дистанцию
+                local targetHRP = currentTarget.Character:FindFirstChild("HumanoidRootPart")
+                if not targetHRP then
+                    return
+                end
+                
+                local myHRP = character:FindFirstChild("HumanoidRootPart")
+                if not myHRP then
+                    return
+                end
+                
+                local distance = (myHRP.Position - targetHRP.Position).Magnitude
+                local maxRange = 5000 -- Максимальная дистанция для Force Hit
+                
+                if distance > maxRange then
+                    return
+                end
+                
+                -- Выполняем Force Hit
+                local success = utility.performForceHit(utility, currentTarget)
+                if success then
+                    ForceHitFramework.lastShotTime = now
+                end
+            end)
+        end
+        
+        function ForceHitFramework.stop()
+            ForceHitFramework.enabled = false
+            if ForceHitFramework.connection then
+                ForceHitFramework.connection:Disconnect()
+                ForceHitFramework.connection = nil
+            end
+        end
+        
+        _G.ForceHitFramework = ForceHitFramework
+    end
+    
+    do -- AutoReload Framework
+        local AutoReloadFramework = {
+            enabled = false,
+            connection = nil,
+            reloadDelay = 1.0, -- Задержка после перезарядки
+            lastReloadTime = 0,
+            mainModule = nil
+        }
+        
+        function AutoReloadFramework.start()
+            if AutoReloadFramework.connection then
+                return
+            end
+            
+            -- Получаем MainModule
+            local handler = replicated_storage:FindFirstChild("MainModule")
+            if not handler then
+                return
+            end
+            
+            local success, module = pcall(function()
+                return require(handler)
+            end)
+            
+            if not success or not module then
+                return
+            end
+            
+            AutoReloadFramework.mainModule = module
+            AutoReloadFramework.enabled = true
+            
+            AutoReloadFramework.connection = E.new_connection(b.Heartbeat, function()
+                if not AutoReloadFramework.enabled then
+                    return
+                end
+                
+                -- Проверяем задержку после последней перезарядки
+                local now = os.clock()
+                if now - AutoReloadFramework.lastReloadTime < AutoReloadFramework.reloadDelay then
+                    return
+                end
+                
+                local character = g.Character
+                if not character then
+                    return
+                end
+                
+                -- Используем новую логику с MainModule.GunHold
+                local gun = AutoReloadFramework.mainModule.GunHold(character)
+                if not gun or not gun[1] then
+                    return
+                end
+                
+                local tool = gun[1]
+                local ammo = tool:FindFirstChild("Ammo")
+                if not ammo or ammo.Value > 0 then
+                    return
+                end
+                
+                -- Перезаряжаем оружие через новый remote
+                main_remote:FireServer("Reload", tool)
+                AutoReloadFramework.lastReloadTime = now
+            end)
+        end
+        
+        function AutoReloadFramework.stop()
+            if AutoReloadFramework.connection then
+                AutoReloadFramework.connection:Disconnect()
+                AutoReloadFramework.connection = nil
+            end
+            AutoReloadFramework.enabled = false
+            AutoReloadFramework.mainModule = nil
+        end
+        
+        function AutoReloadFramework.setEnabled(enabled)
+            if enabled then
+                AutoReloadFramework.start()
+            else
+                AutoReloadFramework.stop()
+            end
+        end
+        
+        _G.AutoReloadFramework = AutoReloadFramework
+    end
+    
+    do -- Wallbang Framework
+        local WallbangFramework = {
+            enabled = false,
+            originalIgnored = nil,
+            mainModule = nil
+        }
+        
+        function WallbangFramework.start()
+            if WallbangFramework.enabled then
+                return
+            end
+            
+            -- Получаем MainModule
+            local replicatedStorage = game:GetService("ReplicatedStorage")
+            local handler = replicatedStorage:FindFirstChild("MainModule")
+            if not handler then
+                print("[Wallbang] MainModule not found")
+                return
+            end
+            
+            local success, module = pcall(function()
+                return require(handler)
+            end)
+            
+            if not success or not module then
+                print("[Wallbang] Failed to require MainModule")
+                return
+            end
+            
+            WallbangFramework.mainModule = module
+            
+            -- Сохраняем оригинальные значения
+            if module.Ignored then
+                WallbangFramework.originalIgnored = {}
+                for i, v in ipairs(module.Ignored) do
+                    WallbangFramework.originalIgnored[i] = v
+                end
+                print("[Wallbang] Original Ignored saved:", #WallbangFramework.originalIgnored, "items")
+            else
+                WallbangFramework.originalIgnored = nil
+                print("[Wallbang] No original Ignored found")
+            end
+            
+            -- Устанавливаем новые значения для Wallbang
+            pcall(function()
+                module.Ignored = {
+                    workspace:WaitForChild("Vehicles"), 
+                    workspace:WaitForChild("MAP"), 
+                    workspace:WaitForChild("Ignored")
+                }
+            end)
+            
+            WallbangFramework.enabled = true
+            print("[Wallbang] Framework started - walls will be ignored")
+        end
+        
+        function WallbangFramework.stop()
+            if not WallbangFramework.enabled then
+                return
+            end
+            
+            -- Восстанавливаем оригинальные значения
+            if WallbangFramework.mainModule and WallbangFramework.originalIgnored then
+                pcall(function()
+                    WallbangFramework.mainModule.Ignored = {}
+                    for i, v in ipairs(WallbangFramework.originalIgnored) do
+                        WallbangFramework.mainModule.Ignored[i] = v
+                    end
+                end)
+                print("[Wallbang] Original Ignored restored:", #WallbangFramework.originalIgnored, "items")
+            elseif WallbangFramework.mainModule then
+                -- Если оригинальных значений не было, очищаем
+                pcall(function()
+                    WallbangFramework.mainModule.Ignored = {}
+                end)
+                print("[Wallbang] Ignored cleared (no original values)")
+            end
+            
+            WallbangFramework.enabled = false
+            WallbangFramework.originalIgnored = nil
+            WallbangFramework.mainModule = nil
+            print("[Wallbang] Framework stopped - walls restored")
+        end
+        
+        _G.WallbangFramework = WallbangFramework
+    end
+    
+    do -- NoSpread Framework
+        local NoSpreadFramework = {
+            enabled = false,
+            originalMathRandom = nil,
+            hookedFunction = nil
+        }
+        
+        function NoSpreadFramework.start()
+            if NoSpreadFramework.enabled then
+                return
+            end
+            
+            -- Создаем хук для math.random
+            local old
+            old = hookfunction(math.random, function(...)
+                local args = {...}
+                
+                -- Проверяем, вызывается ли из нашего кода
+                if checkcaller() then
+                    return old(...)
+                end
+                
+                -- Проверяем аргументы для spread
+                if (#args == 0) or 
+                   (args[1] == -0.05 and args[2] == 0.05) or 
+                   (args[1] == -0.1) or
+                   (args[1] == -0.05) then
+                    
+                    -- Если NoSpread включен, возвращаем минимальный spread (1% от оригинала)
+                    local originalResult = old(...)
+                    return originalResult * 0.01 -- 1% spread
+                end
+                
+                return old(...)
+            end)
+            
+            NoSpreadFramework.originalMathRandom = old
+            
+            NoSpreadFramework.enabled = true
+            print("[NoSpread] Framework started - bullet spread reduced to 1%")
+        end
+        
+        function NoSpreadFramework.stop()
+            if not NoSpreadFramework.enabled then
+                return
+            end
+            
+            -- Восстанавливаем оригинальную функцию math.random
+            if NoSpreadFramework.originalMathRandom then
+                pcall(function()
+                    hookfunction(math.random, NoSpreadFramework.originalMathRandom)
+                end)
+            end
+            
+            NoSpreadFramework.enabled = false
+            NoSpreadFramework.originalMathRandom = nil
+            NoSpreadFramework.hookedFunction = nil
+            print("[NoSpread] Framework stopped - original bullet spread restored")
+        end
+        
+        _G.NoSpreadFramework = NoSpreadFramework
+    end
+    
+    do -- Infinity Range Framework
+        local InfinityRangeFramework = {
+            enabled = false,
+            connection = nil,
+            originalValues = {}
+        }
+        
+        local function findRangeValues(weapon)
+            local rangeValues = {}
+            
+            -- Прямой поиск в оружии
+            local range = weapon:FindFirstChild("Range") or 
+                         weapon:FindFirstChild("MaxRange") or 
+                         weapon:FindFirstChild("Distance") or
+                         weapon:FindFirstChild("MaxDistance") or
+                         weapon:FindFirstChild("Reach")
+            if range then
+                p(rangeValues, range)
+            end
+            
+            -- Поиск в Configuration/Settings
+            local config = weapon:FindFirstChild("Configuration") or 
+                          weapon:FindFirstChild("Settings") or
+                          weapon:FindFirstChild("Config") or
+                          weapon:FindFirstChild("Stats")
+            if config then
+                local configRange = config:FindFirstChild("Range") or 
+                                   config:FindFirstChild("MaxRange") or
+                                   config:FindFirstChild("Distance") or
+                                   config:FindFirstChild("MaxDistance") or
+                                   config:FindFirstChild("Reach") or
+                                   config:FindFirstChild("FireRange")
+                if configRange then
+                    p(rangeValues, configRange)
+                end
+            end
+            
+            -- Поиск в Handle
+            local handle = weapon:FindFirstChild("Handle")
+            if handle then
+                local handleRange = handle:FindFirstChild("Range") or 
+                                   handle:FindFirstChild("MaxRange") or
+                                   handle:FindFirstChild("Distance")
+                if handleRange then
+                    p(rangeValues, handleRange)
+                end
+                
+                -- Поиск в Handle/Configuration
+                local handleConfig = handle:FindFirstChild("Configuration") or 
+                                    handle:FindFirstChild("Settings")
+                if handleConfig then
+                    local hcRange = handleConfig:FindFirstChild("Range") or 
+                                   handleConfig:FindFirstChild("MaxRange") or
+                                   handleConfig:FindFirstChild("Distance")
+                    if hcRange then
+                        p(rangeValues, hcRange)
+                    end
+                end
+            end
+            
+            -- Поиск в GunScript или аналогичных скриптах
+            local gunScript = weapon:FindFirstChild("GunScript") or 
+                             weapon:FindFirstChild("WeaponScript") or
+                             weapon:FindFirstChild("Script")
+            if gunScript then
+                local scriptRange = gunScript:FindFirstChild("Range") or 
+                                   gunScript:FindFirstChild("MaxRange")
+                if scriptRange then
+                    p(rangeValues, scriptRange)
+                end
+            end
+            
+            return rangeValues
+        end
+        
+        local function updateRange(weapon)
+            local rangeValues = findRangeValues(weapon)
+            
+            for _, rangeValue in ipairs(rangeValues) do
+                if rangeValue:IsA("NumberValue") or rangeValue:IsA("IntValue") then
+                    -- Сохраняем оригинальное значение если еще не сохранили
+                    local key = tostring(weapon) .. "_" .. tostring(rangeValue)
+                    if InfinityRangeFramework.enabled then
+                        if not InfinityRangeFramework.originalValues[key] then
+                            InfinityRangeFramework.originalValues[key] = rangeValue.Value
+                        end
+                        -- Устанавливаем огромное значение
+                        rangeValue.Value = 999999999999999999
+                    else
+                        -- Восстанавливаем оригинальное значение
+                        if InfinityRangeFramework.originalValues[key] then
+                            rangeValue.Value = InfinityRangeFramework.originalValues[key]
+                        end
+                    end
+                end
+            end
+        end
+        
+        function InfinityRangeFramework.setEnabled(state)
+            InfinityRangeFramework.enabled = state
+            
+            if state and not InfinityRangeFramework.connection then
+                InfinityRangeFramework.connection = E.new_connection(b.Heartbeat, function()
+                    if not InfinityRangeFramework.enabled then
+                        return
+                    end
+                    
+                    -- Ищем оружие в руках
+                    local character = g.Character
+                    if character then
+                        local tool = character:FindFirstChildOfClass("Tool")
+                        if tool then
+                            pcall(function()
+                                updateRange(tool)
+                            end)
+                        end
+                    end
+                    
+                    -- Ищем оружие в workspace.Players
+                    local playersFolder = workspace:FindFirstChild("Players")
+                    if playersFolder then
+                        local playerFolder = playersFolder:FindFirstChild(g.Name)
+                        if playerFolder then
+                            for _, child in ipairs(playerFolder:GetChildren()) do
+                                local name = child.Name
+                                if name:match("%[.+%]") or 
+                                   name:match("Gun") or 
+                                   name:match("Pistol") or 
+                                   name:match("Rifle") or
+                                   name:match("Shotgun") or
+                                   name:match("Revolver") then
+                                    pcall(function()
+                                        updateRange(child)
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end)
+            elseif not state then
+                -- Восстанавливаем все оригинальные значения
+                local character = g.Character
+                if character then
+                    local tool = character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        pcall(function()
+                            updateRange(tool)
+                        end)
+                    end
+                end
+                
+                local playersFolder = workspace:FindFirstChild("Players")
+                if playersFolder then
+                    local playerFolder = playersFolder:FindFirstChild(g.Name)
+                    if playerFolder then
+                        for _, child in ipairs(playerFolder:GetChildren()) do
+                            pcall(function()
+                                updateRange(child)
+                            end)
+                        end
+                    end
+                end
+                
+                if InfinityRangeFramework.connection then
+                    InfinityRangeFramework.connection:Disconnect()
+                    InfinityRangeFramework.connection = nil
+                end
+                
+                -- Очищаем сохраненные значения
+                InfinityRangeFramework.originalValues = {}
+            end
+        end
+        
+        _G.InfinityRangeFramework = InfinityRangeFramework
+    end
+    
+    do -- Infinity Ammo Framework
+        local InfinityAmmoFramework = {
+            enabled = false,
+            connection = nil
+        }
+        
+        local function updateAmmo()
+            -- Работаем только через workspace.Players
+            local playersFolder = workspace:FindFirstChild("Players")
+            if not playersFolder then return end
+            
+            local playerFolder = playersFolder:FindFirstChild(g.Name)
+            if not playerFolder then return end
+            
+            -- Проходим по всем объектам в папке игрока
+            for _, weapon in ipairs(playerFolder:GetChildren()) do
+                local name = weapon.Name
+                -- Проверяем типичные паттерны названий оружия
+                if name:match("%[.+%]") or -- [Revolver], [Shotgun] и т.д.
+                   name:match("Gun") or 
+                   name:match("Pistol") or 
+                   name:match("Rifle") or
+                   name:match("Shotgun") or
+                   name:match("Revolver") or
+                   name:match("SMG") or
+                   name:match("AK") or
+                   name:match("Glock") or
+                   name:match("Weapon") then
+                    
+                    -- Ищем патроны в оружии
+                    local ammoValue = weapon:FindFirstChild("Ammo") or 
+                                     weapon:FindFirstChild("Bullets") or 
+                                     weapon:FindFirstChild("Clip") or
+                                     weapon:FindFirstChild("CurrentAmmo")
+                    
+                    local maxAmmoValue = weapon:FindFirstChild("MaxAmmo") or 
+                                        weapon:FindFirstChild("MaxBullets") or 
+                                        weapon:FindFirstChild("ClipSize") or
+                                        weapon:FindFirstChild("MaxClip")
+                    
+                    -- Если не нашли, ищем в Configuration
+                    if not ammoValue then
+                        local config = weapon:FindFirstChild("Configuration") or 
+                                      weapon:FindFirstChild("Settings") or
+                                      weapon:FindFirstChild("Config")
+                        if config then
+                            ammoValue = config:FindFirstChild("Ammo") or 
+                                       config:FindFirstChild("Bullets") or
+                                       config:FindFirstChild("CurrentAmmo")
+                            maxAmmoValue = maxAmmoValue or config:FindFirstChild("MaxAmmo") or 
+                                          config:FindFirstChild("MaxBullets") or
+                                          config:FindFirstChild("ClipSize")
+                        end
+                    end
+                    
+                    -- Если не нашли, ищем в Handle
+                    if not ammoValue then
+                        local handle = weapon:FindFirstChild("Handle")
+                        if handle then
+                            ammoValue = handle:FindFirstChild("Ammo") or 
+                                       handle:FindFirstChild("Bullets")
+                            maxAmmoValue = maxAmmoValue or handle:FindFirstChild("MaxAmmo") or 
+                                          handle:FindFirstChild("MaxBullets")
+                        end
+                    end
+                    
+                    -- Обновляем патроны если нашли
+                    if ammoValue and maxAmmoValue then
+                        if (ammoValue:IsA("NumberValue") or ammoValue:IsA("IntValue")) and
+                           (maxAmmoValue:IsA("NumberValue") or maxAmmoValue:IsA("IntValue")) then
+                            if ammoValue.Value ~= maxAmmoValue.Value then
+                                ammoValue.Value = maxAmmoValue.Value
+                            end
+                        end
+                    elseif ammoValue and not maxAmmoValue then
+                        -- Если нет максимального значения, устанавливаем большое число
+                        if ammoValue:IsA("NumberValue") or ammoValue:IsA("IntValue") then
+                            if ammoValue.Value < 999 then
+                                ammoValue.Value = 999
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        function InfinityAmmoFramework.setEnabled(state)
+            InfinityAmmoFramework.enabled = state
+            
+            if state and not InfinityAmmoFramework.connection then
+                InfinityAmmoFramework.connection = E.new_connection(b.Heartbeat, function()
+                    if not InfinityAmmoFramework.enabled then
+                        return
+                    end
+                    
+                    pcall(updateAmmo)
+                end)
+            elseif not state and InfinityAmmoFramework.connection then
+                InfinityAmmoFramework.connection:Disconnect()
+                InfinityAmmoFramework.connection = nil
+            end
+        end
+        
+        _G.InfinityAmmoFramework = InfinityAmmoFramework
+    end
+    
+    do -- Rapid Fire Framework
+        local RapidFireFramework = {
+            enabled = false,
+            original = {},
+            connection = nil
+        }
+        
+        function RapidFireFramework.setEnabled(state)
+            RapidFireFramework.enabled = state
+            
+            if state and not RapidFireFramework.connection then
+                RapidFireFramework.connection = E.new_connection(b.RenderStepped, function()
+                    if not RapidFireFramework.enabled then
+                        return
+                    end
+                    
+                    local tool = g.Character and g.Character:FindFirstChildOfClass("Tool")
+                    if tool and tool:FindFirstChild("GunScript") then
+                        for _, connection in ipairs(getconnections(tool.Activated)) do
+                            local func = connection.Function
+                            if func then
+                                local funcInfo = debug.getinfo(func)
+                                for i = 1, funcInfo.nups do
+                                    local c, _n = debug.getupvalue(func, i)
+                                    if type(c) == "number" then
+                                        if not RapidFireFramework.original[i] then
+                                            RapidFireFramework.original[i] = c
+                                        end
+                                        debug.setupvalue(func, i, RapidFireFramework.enabled and 0.00000000000000000001 or RapidFireFramework.original[i])
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end)
+            elseif not state and RapidFireFramework.connection then
+                -- Восстанавливаем оригинальные значения
+                local tool = g.Character and g.Character:FindFirstChildOfClass("Tool")
+                if tool and tool:FindFirstChild("GunScript") then
+                    for _, connection in ipairs(getconnections(tool.Activated)) do
+                        local func = connection.Function
+                        if func then
+                            local funcInfo = debug.getinfo(func)
+                            for i = 1, funcInfo.nups do
+                                local c, _n = debug.getupvalue(func, i)
+                                if type(c) == "number" and RapidFireFramework.original[i] then
+                                    debug.setupvalue(func, i, RapidFireFramework.original[i])
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if RapidFireFramework.connection then
+                    RapidFireFramework.connection:Disconnect()
+                    RapidFireFramework.connection = nil
+                end
+                RapidFireFramework.original = {}
+            end
+        end
+        
+        _G.RapidFireFramework = RapidFireFramework
     end
     
     do -- Beam Visualization
@@ -1032,6 +2360,265 @@ do -- Ragebot Tab
         }
     end
     
+    do -- Hide Framework
+        local HideFramework = {}
+        local hideConnection = nil
+        local isHiding = false
+        local isPaused = false
+        local lastHideTime = 0
+        local hideInterval = 0.1
+        
+        local function getRandomVoidPosition()
+            local x = h() * 5000 - 1000 -- random от -1000 до 1000
+            local y = -100000 -- -math.huge
+            local z = h() * 5000 - 1000 -- random от -1000 до 1000
+            return B(x, y, z)
+        end
+        
+        function HideFramework.start()
+            if isHiding then return end
+            
+            isHiding = true
+            K:Notification("Hide enabled", 2, z(128, 0, 128))
+            
+            hideConnection = b.Heartbeat:Connect(function()
+                if not isHiding then
+                    if hideConnection then
+                        hideConnection:Disconnect()
+                        hideConnection = nil
+                    end
+                    return
+                end
+                
+                -- Проверяем паузу
+                if isPaused then
+                    -- Просто выходим на паузе, не синхронизируемся
+                    return
+                end
+                
+                -- Проверяем флаг
+                if not K.Flags["HideEnabled"] then
+                    if hideConnection then
+                        hideConnection:Disconnect()
+                        hideConnection = nil
+                    end
+                    isHiding = false
+                    return
+                end
+                
+                -- Используем десинк для прятания в войде
+                if getgenv().DesyncLibrary then
+                    local currentTime = os.clock()
+                    if currentTime - lastHideTime >= hideInterval then
+                        lastHideTime = currentTime
+                        local voidPos = getRandomVoidPosition()
+                        getgenv().DesyncLibrary.movedesyncto(voidPos.X, voidPos.Y, voidPos.Z)
+                    end
+                end
+            end)
+        end
+        
+        function HideFramework.stop()
+            isHiding = false
+            isPaused = false
+            
+            if hideConnection then
+                hideConnection:Disconnect()
+                hideConnection = nil
+            end
+            
+            -- Синхронизируемся при остановке
+            if getgenv().DesyncLibrary then
+                getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+            end
+            
+            K:Notification("Hide disabled", 2, z(255, 0, 0))
+        end
+        
+        function HideFramework.pause()
+            isPaused = true
+        end
+        
+        function HideFramework.resume()
+            isPaused = false
+            -- При возобновлении сразу применяем Hide позицию если фреймворк активен
+            if isHiding and getgenv().DesyncLibrary then
+                local voidPos = getRandomVoidPosition()
+                getgenv().DesyncLibrary.movedesyncto(voidPos.X, voidPos.Y, voidPos.Z)
+                print("[Hide] Resumed and applied hide position")
+            end
+        end
+        
+        function HideFramework.isEnabled()
+            return isHiding
+        end
+        
+        function HideFramework.isPaused()
+            return isPaused
+        end
+        
+        _G.HideFramework = HideFramework
+    end
+    
+    do -- Auto Stomp Framework
+        local AutoStompFramework = {}
+        local stompConnection = nil
+        local isStomping = false
+        local isPaused = false
+        local lastStompTime = 0
+        local stompInterval = 0.1
+        
+        local function isPlayerKO(player)
+            if not player or not player.Character then return false end
+            
+            local bodyEffects = player.Character:FindFirstChild("BodyEffects")
+            if not bodyEffects then return false end
+            
+            local ko = bodyEffects:FindFirstChild("K.O")
+            if ko and ko.Value == true then return true end
+            
+            return false
+        end
+        
+        local function performStomp()
+            local args = {"Stomp"}
+            local mainRemoteEvent = game:GetService("ReplicatedStorage"):WaitForChild("MainRemotes"):WaitForChild("MainRemoteEvent")
+            if mainRemoteEvent then
+                mainRemoteEvent:FireServer(unpack(args))
+            end
+        end
+        
+        function AutoStompFramework.start()
+            if isStomping then return end
+            
+            isStomping = true
+            K:Notification("Auto Stomp enabled", 2, z(0, 255, 0))
+            
+            -- Простой подход с проверкой паузы
+            stompConnection = b.Heartbeat:Connect(function()
+                if not isStomping then
+                    if stompConnection then
+                        stompConnection:Disconnect()
+                        stompConnection = nil
+                    end
+                    return
+                end
+                
+                -- Проверяем паузу
+                if isPaused then
+                    -- Просто выходим на паузе, не синхронизируемся
+                    return
+                end
+                
+                local currentTarget = _G.TargetingFramework:GetCurrentTarget()
+                
+                -- Проверяем приоритет Hide ТОЛЬКО если нет K.O цели
+                -- Если есть K.O цель, AutoStomp имеет приоритет над Hide
+                if not currentTarget or not currentTarget.Character or not isPlayerKO(currentTarget) then
+                    -- Нет K.O цели - Hide может блокировать AutoStomp
+                    if _G.HideFramework and _G.HideFramework.isEnabled() and not _G.HideFramework.isPaused() then
+                        return
+                    end
+                end
+                if not currentTarget then 
+                    -- Синхронизируемся только если НЕ на паузе (чтобы не мешать AutoArmor)
+                    if not isPaused and getgenv().DesyncLibrary then
+                        pcall(function()
+                            getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        end)
+                        -- Ждем немного после синхронизации, затем возобновляем Hide
+                        task.wait(0.1)
+                        if _G.HideFramework and _G.HideFramework.isEnabled() and _G.HideFramework.isPaused() then
+                            _G.HideFramework.resume()
+                        end
+                    end
+                    return 
+                end
+                
+                if not currentTarget.Character then 
+                    -- Синхронизируемся только если НЕ на паузе (чтобы не мешать AutoArmor)
+                    if not isPaused and getgenv().DesyncLibrary then
+                        pcall(function()
+                            getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        end)
+                        -- Ждем немного после синхронизации, затем возобновляем Hide
+                        task.wait(0.1)
+                        if _G.HideFramework and _G.HideFramework.isEnabled() and _G.HideFramework.isPaused() then
+                            _G.HideFramework.resume()
+                        end
+                    end
+                    return 
+                end
+                
+                if not isPlayerKO(currentTarget) then 
+                    -- Синхронизируемся только если НЕ на паузе (чтобы не мешать AutoArmor)
+                    if not isPaused and getgenv().DesyncLibrary then
+                        pcall(function()
+                            getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        end)
+                        -- Ждем немного после синхронизации, затем возобновляем Hide
+                        task.wait(0.1)
+                        if _G.HideFramework and _G.HideFramework.isEnabled() and _G.HideFramework.isPaused() then
+                            _G.HideFramework.resume()
+                        end
+                    end
+                    return 
+                end
+                
+                -- Если дошли до сюда - есть K.O цель, приостанавливаем Hide если он активен
+                if _G.HideFramework and _G.HideFramework.isEnabled() and not _G.HideFramework.isPaused() then
+                    _G.HideFramework.pause()
+                end
+                
+                local upperTorso = currentTarget.Character:FindFirstChild("UpperTorso")
+                if not upperTorso then return end
+                
+                -- Используем десинк для стомпа
+                if getgenv().DesyncLibrary then
+                    local pos = upperTorso.Position
+                    getgenv().DesyncLibrary.movedesyncto(pos.X, pos.Y + 1, pos.Z)
+                    
+                    local currentTime = os.clock()
+                    if currentTime - lastStompTime >= stompInterval then
+                        lastStompTime = currentTime
+                        performStomp()
+                    end
+                end
+            end)
+        end
+        
+        function AutoStompFramework.stop()
+            isStomping = false
+            isPaused = false
+            
+            if stompConnection then
+                stompConnection:Disconnect()
+                stompConnection = nil
+            end
+            
+            -- Синхронизируемся при остановке
+            if getgenv().DesyncLibrary then
+                getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+            end
+            
+            K:Notification("Auto Stomp disabled", 2, z(255, 0, 0))
+        end
+        
+        function AutoStompFramework.pause()
+            isPaused = true
+        end
+        
+        function AutoStompFramework.resume()
+            isPaused = false
+        end
+        
+        function AutoStompFramework.isEnabled()
+            return isStomping
+        end
+        
+        _G.AutoStompFramework = AutoStompFramework
+    end
+
     do -- AutoArmor Framework
         local AutoArmorFramework = {}
         local armorConnection = nil
@@ -1039,127 +2626,154 @@ do -- Ragebot Tab
         local isBuying = false
         
         local function GetArmorItem()
-            local ignored = workspace:FindFirstChild("Ignored")
-            ignored = ignored and ignored:FindFirstChild("Shop")
-            if not ignored then
-                return nil, nil
+            local shop = workspace.Ignored and workspace.Ignored.Shop
+            if shop then
+                local armorItem = shop:FindFirstChild("[Full Armor] - $1659")
+                return armorItem
             end
-            
-            local shop_children = ignored:GetChildren()
-            local shop_item = shop_children[47] -- Armor shop item
-            local head, click_detector
-            
-            if shop_item then
-                head = shop_item:FindFirstChild("Head")
-                if head then
-                    click_detector = head:FindFirstChildOfClass("ClickDetector") or shop_item:FindFirstChildOfClass("ClickDetector")
-                end
-            end
-            
-            -- Fallback search
-            if not (shop_item and head and click_detector) then
-                shop_item, head, click_detector = nil, nil, nil
-                for _, item in ipairs(shop_children) do
-                    local item_head = item:FindFirstChild("Head")
-                    if item_head then
-                        local detector = item_head:FindFirstChildOfClass("ClickDetector") or item:FindFirstChildOfClass("ClickDetector")
-                        if detector then
-                            shop_item, head, click_detector = item, item_head, detector
-                            break
-                        end
-                    end
-                end
-            end
-            
-            return head, click_detector
+            return nil
         end
         
         local function BuyArmor()
-            if not K.Flags["AutoArmorEnabled"] then return end
-            if isBuying then return end -- Предотвращаем спам
+            if not K.Flags["AutoArmorEnabled"] then 
+                return 
+            end
+            if isBuying then 
+                print("[AutoArmor] Already buying, skipping")
+                return 
+            end
             
             local player = g
             if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+                print("[AutoArmor] No character or HumanoidRootPart")
                 return
             end
             
-            -- Получаем текущую броню через новый путь
-            local character = player.Character
-            if not character then
-                return
-            end
-            local body_effects = character:FindFirstChild("BodyEffects")
-            local armor = body_effects and body_effects:FindFirstChild("Armor")
-            if not armor then
+            local bodyEffects = player.Character:FindFirstChild("BodyEffects")
+            if not bodyEffects then 
+                print("[AutoArmor] No BodyEffects found")
                 return
             end
             
-            local head, click_detector = GetArmorItem()
-            if not (head and click_detector) then return end
+            local armorValue = bodyEffects:FindFirstChild("Armor")
+            if not armorValue then 
+                print("[AutoArmor] No Armor value found in BodyEffects")
+                return
+            end
             
-            local currentArmor = armor.Value
-            if currentArmor >= 200 or currentArmor > ARMOR_THRESHOLD then return end
+            local armorItem = GetArmorItem()
+            if not armorItem then 
+                print("[AutoArmor] Armor item not found in shop")
+                return 
+            end
             
-            -- Проверяем деньги
-            local data_folder = player:FindFirstChild("DataFolder")
-            local currency = data_folder and data_folder:FindFirstChild("Currency")
-            local money = currency and currency.Value or 0
-            if money < 1000 then return end
+            local currentArmor = armorValue.Value
+            print("[AutoArmor] Current armor:", currentArmor, "Threshold:", ARMOR_THRESHOLD)
             
-            isBuying = true -- Блокируем повторные вызовы
+            if currentArmor > ARMOR_THRESHOLD then 
+                return 
+            end
             
-            -- Уведомление о начале цикла покупки
-            K:Notification("Buying armor...", 2, z(255, 255, 0))
+            print("[AutoArmor] Starting armor purchase, current armor:", currentArmor)
+            isBuying = true
+            
+            -- ОСТАНАВЛИВАЕМ другие фреймворки если они включены (приоритет AutoArmor)
+            local wasStompEnabled = false
+            local wasHideEnabled = false
+            
+            if _G.AutoStompFramework and _G.AutoStompFramework.isEnabled() then
+                wasStompEnabled = true
+                print("[AutoArmor] Pausing AutoStomp")
+                _G.AutoStompFramework.pause()
+            end
+            
+            if _G.HideFramework and _G.HideFramework.isEnabled() then
+                wasHideEnabled = true
+                print("[AutoArmor] Pausing Hide")
+                _G.HideFramework.pause()
+            end
             
             -- Используем новый desync фреймворк для покупки
             if getgenv().DesyncLibrary then
-                local success = pcall(function()
+                K:Notification("[DEBUG] Buying armor, stomp paused: " .. tostring(wasStompEnabled), 3, z(255, 255, 0))
+                print("[AutoArmor] Moving to armor shop with desync")
+                
+                local success, err = pcall(function()
                     -- Перемещаемся к объекту брони через новый desync API
-                    getgenv().DesyncLibrary.movedesyncto(head.CFrame)
-                    wait(0.5)
+                    getgenv().DesyncLibrary.movedesyncto(armorItem.Head.CFrame)
+                    wait(0.3)
                     
+                    print("[AutoArmor] Clicking armor detector")
                     -- Покупаем броню
-                    fireclickdetector(click_detector)
+                    fireclickdetector(armorItem.ClickDetector)
                     wait(0.5)
                     
-                    -- Проверяем, активен ли Hide режим
-                    local wasHiding = _G.HideFramework and _G.HideFramework.isEnabled()
+                    print("[AutoArmor] Syncing with player")
+                    -- Синхронизируемся с локальным игроком
+                    getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
                     
-                    if wasHiding then
-                        -- Если Hide активен, возвращаемся в войд вместо синхронизации
-                        local hidePosition = B((h() - 0.5) * 2 * i, -i, (h() - 0.5) * 2 * i)
-                        getgenv().DesyncLibrary.movedesyncto(hidePosition)
-                    else
-                        -- Синхронизируемся с локальным игроком только если Hide не активен
-                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                    -- Проверяем, нужно ли восстановить Hide после синхронизации
+                    task.wait(0.1) -- Небольшая задержка после синхронизации
+                    if _G.HideFramework and _G.HideFramework.isEnabled() and not _G.HideFramework.isPaused() then
+                        local x = h() * 5000 - 1000
+                        local y = -100000
+                        local z = h() * 5000 - 1000
+                        getgenv().DesyncLibrary.movedesyncto(x, y, z)
+                        print("[AutoArmor] Restored Hide position after sync")
                     end
                 end)
                 
                 if not success then
-                    -- В случае ошибки проверяем Hide режим
+                    print("[AutoArmor] Error during purchase:", err)
+                    -- В случае ошибки синхронизируемся с локальным игроком
                     pcall(function()
-                        local wasHiding = _G.HideFramework and _G.HideFramework.isEnabled()
-                        if wasHiding then
-                            -- Возвращаемся в войд
-                            local hidePosition = B((h() - 0.5) * 2 * i, -i, (h() - 0.5) * 2 * i)
-                            getgenv().DesyncLibrary.movedesyncto(hidePosition)
-                        else
-                            -- Синхронизируемся с локальным игроком
-                            getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        getgenv().DesyncLibrary.SynchronizeSyncWithPlayer()
+                        
+                        -- Проверяем, нужно ли восстановить Hide после синхронизации
+                        task.wait(0.1)
+                        if _G.HideFramework and _G.HideFramework.isEnabled() and not _G.HideFramework.isPaused() then
+                            local x = h() * 5000 - 1000
+                            local y = -100000
+                            local z = h() * 5000 - 1000
+                            getgenv().DesyncLibrary.movedesyncto(x, y, z)
+                            print("[AutoArmor] Restored Hide position after error sync")
                         end
                     end)
                 end
                 
-                -- Уведомление о завершении цикла
-                local wasHiding = _G.HideFramework and _G.HideFramework.isEnabled()
-                if wasHiding then
-                    K:Notification("Armor buyed, returned to void", 2, z(0, 255, 0))
+                -- Проверяем броню после покупки
+                wait(0.2)
+                local bodyEffectsAfter = player.Character:FindFirstChild("BodyEffects")
+                if bodyEffectsAfter and bodyEffectsAfter:FindFirstChild("Armor") then
+                    local newArmor = bodyEffectsAfter.Armor.Value
+                print("[AutoArmor] Armor after purchase:", newArmor)
+                
+                    if newArmor >= 200 then
+                        K:Notification("[DEBUG] Armor bought: " .. newArmor, 3, z(0, 255, 0))
+                    else
+                        K:Notification("[DEBUG] Armor purchase failed: " .. newArmor, 3, z(255, 0, 0))
+                    end
                 else
-                    K:Notification("Armor buyed, player synced", 2, z(0, 255, 0))
+                    K:Notification("[DEBUG] Cannot check armor after purchase", 3, z(255, 255, 0))
                 end
+            else
+                print("[AutoArmor] DesyncLibrary not found!")
             end
             
-            isBuying = false -- Разблокируем после завершения
+            -- ВОЗОБНОВЛЯЕМ другие фреймворки если они были включены
+            if wasHideEnabled and _G.HideFramework then
+                print("[AutoArmor] Resuming Hide")
+                _G.HideFramework.resume()
+            end
+            
+            if wasStompEnabled and _G.AutoStompFramework then
+                print("[AutoArmor] Resuming AutoStomp")
+                _G.AutoStompFramework.resume()
+                K:Notification("[DEBUG] Frameworks resumed", 2, z(0, 255, 255))
+            end
+            
+            isBuying = false
+            print("[AutoArmor] Purchase cycle completed")
         end
         
         local function StartAutoArmor()
@@ -1169,7 +2783,7 @@ do -- Ragebot Tab
             end
             
             if K.Flags["AutoArmorEnabled"] then
-                -- Используем более эффективный подход с таймером
+                print("[AutoArmor] Starting AutoArmor framework")
                 local lastCheck = 0
                 armorConnection = b.Heartbeat:Connect(function()
                     -- Проверяем флаг каждый кадр
@@ -1227,7 +2841,2507 @@ do -- Ragebot Tab
         
         _G.AutoArmorFramework = AutoArmorFramework
     end
+    
+    do -- Circle Framework
+        local CircleFramework = {
+            enabled = false,
+            c1 = z(128, 18, 255),
+            c2 = z(255, 0, 128),
+            c3 = z(0, 200, 255),
+            c4 = z(255, 255, 0),
+            speed = 1.0,
+            radius = 2,
+            sides = 48,
+            thickness = 2.5,
+            line_trs = 1.0,
+            y_offset = 0,
+            drawings = {},
+            conn = nil,
+            current_target = nil
+        }
+        
+        local function ensure_lines()
+            if #CircleFramework.drawings == CircleFramework.sides then return end
+            for _, ln in ipairs(CircleFramework.drawings) do 
+                pcall(function() ln:Remove() end) 
+            end
+            CircleFramework.drawings = {}
+            for _ = 1, CircleFramework.sides do
+                local ln = Drawing.new("Line")
+                ln.ZIndex = 2
+                ln.Thickness = CircleFramework.thickness
+                ln.Visible = false
+                p(CircleFramework.drawings, ln)
+            end
+        end
+        
+        local function set_visible_all(v)
+            for _, ln in ipairs(CircleFramework.drawings) do 
+                ln.Visible = v 
+            end
+        end
+        
+        local function cleanup_circle()
+            if CircleFramework.conn then 
+                CircleFramework.conn:Disconnect()
+                CircleFramework.conn = nil 
+            end
+            for _, ln in ipairs(CircleFramework.drawings) do 
+                pcall(function() ln:Remove() end) 
+            end
+            CircleFramework.drawings = {}
+        end
+        
+        local function update_circle()
+            if not CircleFramework.enabled then
+                cleanup_circle()
+                return
+            end
+            
+            -- Получаем текущую цель из TargetingFramework
+            local target_info = _G.TargetingFramework and _G.TargetingFramework._target and _G.TargetingFramework._target.info
+            if not target_info or not target_info.player then
+                set_visible_all(false)
+                return
+            end
+            
+            local target_player = target_info.player
+            local char = target_player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            
+            if not (char and root and hum and hum.Health > 0) then
+                set_visible_all(false)
+                return
+            end
+            
+            ensure_lines()
+            
+            local pos = root.Position + B(0, CircleFramework.y_offset, 0)
+            local root2d, onScreen = cam:WorldToViewportPoint(root.Position)
+            if (not onScreen) or root2d.Z <= 0 then
+                set_visible_all(false)
+                return
+            end
+            
+            local timeNow = tick()
+            local tau = math.pi * 2
+            
+            for i = 1, CircleFramework.sides do
+                local ln = CircleFramework.drawings[i]
+                local f1 = (i / CircleFramework.sides)
+                local a = f1 * tau
+                local b = ((i % CircleFramework.sides) + 1) / CircleFramework.sides * tau
+                
+                local p1 = pos + B(o(a), 0, n(a)) * CircleFramework.radius
+                local p2 = pos + B(o(b), 0, n(b)) * CircleFramework.radius
+                
+                local a2 = cam:WorldToViewportPoint(p1)
+                local b2 = cam:WorldToViewportPoint(p2)
+                
+                local col = _G.TargetingFramework.circle_utility.custom_gradient(
+                    f1, timeNow, 
+                    CircleFramework.c1, CircleFramework.c2, 
+                    CircleFramework.c3, CircleFramework.c4, 
+                    CircleFramework.speed
+                )
+                
+                ln.From = Vector2.new(a2.X, a2.Y)
+                ln.To = Vector2.new(b2.X, b2.Y)
+                ln.Color = col
+                ln.Transparency = CircleFramework.line_trs
+                ln.Thickness = CircleFramework.thickness
+                ln.Visible = true
+            end
+        end
+        
+        function CircleFramework:SetEnabled(v)
+            self.enabled = v
+            if v then
+                if not self.conn then
+                    self.conn = E.new_connection(b.RenderStepped, update_circle)
+                end
+            else
+                set_visible_all(false)
+                cleanup_circle()
+            end
+        end
+        
+        function CircleFramework:SetRadius(r) 
+            self.radius = r 
+        end
+        
+        function CircleFramework:SetSides(n) 
+            self.sides = math.clamp(n, 8, 256)
+            ensure_lines() 
+        end
+        
+        function CircleFramework:SetWidth(w) 
+            self.thickness = w 
+        end
+        
+        function CircleFramework:SetAlpha(t) 
+            self.line_trs = t 
+        end
+        
+        function CircleFramework:SetColors(c1, c2, c3, c4) 
+            self.c1 = c1 or self.c1
+            self.c2 = c2 or self.c2
+            self.c3 = c3 or self.c3
+            self.c4 = c4 or self.c4
+        end
+        
+        function CircleFramework:SetYOffset(y) 
+            self.y_offset = y 
+        end
+        
+        _G.CircleFramework = CircleFramework
+    end
+    
+    do -- Snapline Framework
+        local SnaplineFramework = {
+            enabled = false,
+            origin = "center", -- bot, top, center, mouse
+            color = z(255, 255, 255),
+            outline_color = z(0, 0, 0),
+            thickness = 1.5,
+            outline_thickness = 3.0,
+            transparency = 1.0,
+            outline_transparency = 1.0,
+            line = nil,
+            outline_line = nil,
+            conn = nil
+        }
+        
+        local function cleanup_snapline()
+            if SnaplineFramework.conn then 
+                SnaplineFramework.conn:Disconnect()
+                SnaplineFramework.conn = nil 
+            end
+            if SnaplineFramework.line then 
+                pcall(function() SnaplineFramework.line:Remove() end)
+                SnaplineFramework.line = nil
+            end
+            if SnaplineFramework.outline_line then 
+                pcall(function() SnaplineFramework.outline_line:Remove() end)
+                SnaplineFramework.outline_line = nil
+            end
+        end
+        
+        local function get_origin_position()
+            local origin_pos
+            if SnaplineFramework.origin == "bot" then
+                origin_pos = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y)
+            elseif SnaplineFramework.origin == "top" then
+                origin_pos = Vector2.new(cam.ViewportSize.X / 2, 0)
+            elseif SnaplineFramework.origin == "center" then
+                origin_pos = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+            elseif SnaplineFramework.origin == "mouse" then
+                origin_pos = c:GetMouseLocation()
+            else
+                origin_pos = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+            end
+            return origin_pos
+        end
+        
+        local function update_snapline()
+            if not SnaplineFramework.enabled then
+                cleanup_snapline()
+                return
+            end
+            
+            -- Получаем текущую цель из TargetingFramework
+            local target_info = _G.TargetingFramework and _G.TargetingFramework._target and _G.TargetingFramework._target.info
+            if not target_info or not target_info.player then
+                if SnaplineFramework.line then
+                    SnaplineFramework.line.Visible = false
+                end
+                if SnaplineFramework.outline_line then
+                    SnaplineFramework.outline_line.Visible = false
+                end
+                return
+            end
+            
+            local target_player = target_info.player
+            local char = target_player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            
+            if not (char and root and hum and hum.Health > 0) then
+                if SnaplineFramework.line then
+                    SnaplineFramework.line.Visible = false
+                end
+                if SnaplineFramework.outline_line then
+                    SnaplineFramework.outline_line.Visible = false
+                end
+                return
+            end
+            
+            -- Создаем outline линию если её нет
+            if not SnaplineFramework.outline_line then
+                SnaplineFramework.outline_line = Drawing.new("Line")
+                SnaplineFramework.outline_line.ZIndex = 0
+            end
+            
+            -- Создаем основную линию если её нет
+            if not SnaplineFramework.line then
+                SnaplineFramework.line = Drawing.new("Line")
+                SnaplineFramework.line.ZIndex = 1
+            end
+            
+            local target_pos, onScreen = cam:WorldToViewportPoint(root.Position)
+            if not onScreen or target_pos.Z <= 0 then
+                SnaplineFramework.line.Visible = false
+                SnaplineFramework.outline_line.Visible = false
+                return
+            end
+            
+            local origin_pos = get_origin_position()
+            local target_2d = Vector2.new(target_pos.X, target_pos.Y)
+            
+            -- Настройка outline линии
+            SnaplineFramework.outline_line.From = origin_pos
+            SnaplineFramework.outline_line.To = target_2d
+            SnaplineFramework.outline_line.Color = SnaplineFramework.outline_color
+            SnaplineFramework.outline_line.Thickness = SnaplineFramework.outline_thickness
+            SnaplineFramework.outline_line.Transparency = SnaplineFramework.outline_transparency
+            SnaplineFramework.outline_line.Visible = true
+            
+            -- Настройка основной линии
+            SnaplineFramework.line.From = origin_pos
+            SnaplineFramework.line.To = target_2d
+            SnaplineFramework.line.Color = SnaplineFramework.color
+            SnaplineFramework.line.Thickness = SnaplineFramework.thickness
+            SnaplineFramework.line.Transparency = SnaplineFramework.transparency
+            SnaplineFramework.line.Visible = true
+        end
+        
+        function SnaplineFramework:SetEnabled(v)
+            self.enabled = v
+            if v then
+                if not self.conn then
+                    self.conn = E.new_connection(b.RenderStepped, update_snapline)
+                end
+            else
+                cleanup_snapline()
+            end
+        end
+        
+        function SnaplineFramework:SetOrigin(origin)
+            self.origin = origin
+        end
+        
+        function SnaplineFramework:SetColor(color)
+            self.color = color
+        end
+        
+        function SnaplineFramework:SetThickness(thickness)
+            self.thickness = thickness
+        end
+        
+        function SnaplineFramework:SetTransparency(transparency)
+            self.transparency = transparency
+        end
+        
+        function SnaplineFramework:SetOutlineColor(color)
+            self.outline_color = color
+        end
+        
+        function SnaplineFramework:SetOutlineThickness(thickness)
+            self.outline_thickness = thickness
+        end
+        
+        function SnaplineFramework:SetOutlineTransparency(transparency)
+            self.outline_transparency = transparency
+        end
+        
+        _G.SnaplineFramework = SnaplineFramework
+    end
+    
+    do -- HitChams Framework
+        local HitChamsFramework = {
+            enabled = false
+        }
+        
+        function HitChamsFramework:SetEnabled(value)
+            self.enabled = value
+        end
+        
+        function HitChamsFramework:TriggerHitChams(player)
+            if not self.enabled then return end
+            if _G.TargetingFramework and _G.TargetingFramework.utility then
+                _G.TargetingFramework.utility:createHitChams(player)
+            end
+        end
+        
+        _G.HitChamsFramework = HitChamsFramework
+    end
 end -- End Ragebot Tab
+
+do -- Visuals Tab
+    do -- Target Section
+        local targetSection = N:Section({Name = "Target", Side = 1})
+        
+        -- Target Highlight структура данных
+        local bZ = {
+            hl = nil,           -- основной highlight объект
+            char_added_conn = nil,     -- соединение CharacterAdded
+            char_removing_conn = nil,  -- соединение CharacterRemoving
+            died_conn = nil,           -- соединение Died
+            bound_player = nil,        -- привязанный игрок
+            last_char = nil,           -- последний персонаж
+        }
+        
+        -- Функция создания highlight
+        local function c0()
+            local c1 = Instance.new("Highlight")
+            c1.Name = "RB_HL_32v"
+            c1.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            return c1
+        end
+        
+        -- Функция очистки highlight
+        local function c8()
+            if bZ.hl then
+                bZ.hl:Destroy()
+                bZ.hl = nil
+            end
+        end
+        
+        -- Функция применения highlight
+        local function ce(a3) -- a3 = character
+            if not a3 or not K.Flags or not K.Flags["target_highlight"] then
+                c8() -- cleanup
+                return
+            end
+            
+            -- Создаем highlight объект если его нет
+            if not bZ.hl then
+                bZ.hl = c0()
+            end
+            
+            -- Настраиваем основной highlight
+            local c1 = bZ.hl
+            c1.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            
+            -- Получаем цвета и transparency из флагов (как в других колорпикерах скрипта)
+            local fillColor = K.Flags["target_highlight_fill"]
+            local fillAlpha = K.Flags["target_highlight_fill_alpha"]
+            local outlineColor = K.Flags["target_highlight_outline"]
+            local outlineAlpha = K.Flags["target_highlight_outline_alpha"]
+            
+            -- Применяем Fill Color и Transparency
+            c1.FillColor = fillColor or z(255, 255, 0)
+            c1.FillTransparency = fillAlpha or 0.5
+            
+            -- Применяем Outline Color и Transparency
+            c1.OutlineColor = outlineColor or z(0, 0, 0)
+            c1.OutlineTransparency = outlineAlpha or 0.5
+            
+            c1.Adornee = a3
+            c1.Parent = a3
+            c1.Enabled = true
+            
+            bZ.last_char = a3
+        end
+        
+        -- Функция настройки Died connection
+        local function cg(a3) -- a3 = character
+            if not a3 then return end
+            
+            local aA = a3:FindFirstChildOfClass("Humanoid")
+            if aA then
+                if bZ.died_conn then
+                    bZ.died_conn:Disconnect()
+                end
+                
+                -- При смерти - убираем визуальный highlight
+                bZ.died_conn = aA.Died:Connect(function()
+                    c8() -- cleanup highlights
+                end)
+            end
+        end
+        
+        -- Ключевая функция привязки к игроку
+        local function cj(az) -- az = player
+            if not az then return end
+            
+            -- Отключаем старые соединения
+            if bZ.char_added_conn then
+                bZ.char_added_conn:Disconnect()
+            end
+            if bZ.char_removing_conn then
+                bZ.char_removing_conn:Disconnect()
+            end
+            
+            bZ.bound_player = az
+            
+            -- При удалении персонажа - очищаем highlight
+            bZ.char_removing_conn = az.CharacterRemoving:Connect(function(ck)
+                c8() -- cleanup highlights
+            end)
+            
+            -- ВОТ КЛЮЧЕВАЯ ЛОГИКА - при появлении нового персонажа:
+            bZ.char_added_conn = az.CharacterAdded:Connect(function(ck)
+                if not ck then return end
+                
+                b.Heartbeat:Wait()
+                
+                -- ПРОВЕРЯЕМ - является ли этот игрок текущей целью
+                local cl = _G.targeting_state and _G.targeting_state.current and
+                    (_G.targeting_state.current == az or 
+                     (_G.targeting_state.current.UserId and _G.targeting_state.current.UserId == az.UserId))
+                
+                -- Если да И включен target_highlight - ВОССТАНАВЛИВАЕМ highlight
+                if cl and K.Flags and K.Flags["target_highlight"] then
+                    ce(ck)  -- применяем highlight к новому персонажу
+                    cg(ck)  -- настраиваем died connection
+                end
+            end)
+            
+            -- Если у игрока уже есть персонаж - применяем сразу
+            if az.Character then
+                ce(az.Character)
+                cg(az.Character)
+            end
+        end
+        
+        -- Тогл для Target Highlight
+        local _targetHighlightToggle = targetSection:Toggle({
+            Name = "Highlight",
+            Default = false,
+            Flag = "target_highlight",
+            Callback = function(value)
+                if value then
+                    -- Если включили highlight и есть текущая цель
+                    if _G.TargetingFramework and _G.TargetingFramework._target and _G.TargetingFramework._target.info then
+                        local targetInfo = _G.TargetingFramework._target.info
+                        if targetInfo.player then
+                            cj(targetInfo.player)
+                        end
+                    end
+                else
+                    -- Если выключили highlight - очищаем все
+                    c8()
+                    if bZ.char_added_conn then
+                        bZ.char_added_conn:Disconnect()
+                        bZ.char_added_conn = nil
+                    end
+                    if bZ.char_removing_conn then
+                        bZ.char_removing_conn:Disconnect()
+                        bZ.char_removing_conn = nil
+                    end
+                    if bZ.died_conn then
+                        bZ.died_conn:Disconnect()
+                        bZ.died_conn = nil
+                    end
+                end
+            end
+        })
+        
+        -- Колорпикер для Fill Color с поддержкой transparency
+        _targetHighlightToggle:Colorpicker({
+            Name = "Fill Color",
+            Default = z(255, 255, 0),
+            Alpha = 0.5, -- Включаем слайдер transparency
+            Flag = "target_highlight_fill",
+            Callback = function(color, alpha)
+                -- Сохраняем цвет и alpha отдельно в флаги (как в других колорпикерах)
+                K.Flags["target_highlight_fill"] = color
+                K.Flags["target_highlight_fill_alpha"] = alpha
+                
+                -- Обновляем цвет и transparency если highlight активен
+                if bZ.hl and bZ.hl.Parent then
+                    bZ.hl.FillColor = color
+                    bZ.hl.FillTransparency = alpha or 0.5
+                end
+                -- Пересоздаем highlight с новыми настройками если есть текущая цель
+                if bZ.bound_player and bZ.bound_player.Character then
+                    ce(bZ.bound_player.Character)
+                end
+            end
+        })
+        
+        -- Колорпикер для Outline Color с поддержкой transparency
+        _targetHighlightToggle:Colorpicker({
+            Name = "Outline Color", 
+            Default = z(0, 0, 0),
+            Alpha = 0.5, -- Включаем слайдер transparency
+            Flag = "target_highlight_outline",
+            Callback = function(color, alpha)
+                -- Сохраняем цвет и alpha отдельно в флаги (как в других колорпикерах)
+                K.Flags["target_highlight_outline"] = color
+                K.Flags["target_highlight_outline_alpha"] = alpha
+                
+                -- Обновляем цвет и transparency если highlight активен
+                if bZ.hl and bZ.hl.Parent then
+                    bZ.hl.OutlineColor = color
+                    bZ.hl.OutlineTransparency = alpha or 0.5
+                end
+                -- Пересоздаем highlight с новыми настройками если есть текущая цель
+                if bZ.bound_player and bZ.bound_player.Character then
+                    ce(bZ.bound_player.Character)
+                end
+            end
+        })
+        
+        -- Подключаемся к изменениям цели
+        if _G.TargetingFramework then
+            _G.TargetingFramework:OnTargetUpdate(function(targetInfo)
+                if K.Flags and K.Flags["target_highlight"] then
+                    if targetInfo and targetInfo.player then
+                        cj(targetInfo.player)
+                    else
+                        c8()
+                    end
+                end
+            end)
+        end
+        
+        _G.TargetHighlight = {
+            bZ = bZ,
+            c0 = c0,
+            c8 = c8,
+            ce = ce,
+            cg = cg,
+            cj = cj
+        }
+        
+        -- Circle Toggle
+        local _targetCircleToggle = targetSection:Toggle({
+            Name = "Circle",
+            Default = false,
+            Flag = "target_circle",
+            Callback = function(value)
+                if _G.CircleFramework then
+                    _G.CircleFramework:SetEnabled(value)
+                end
+            end
+        })
+        
+        -- Circle Color 1
+        _targetCircleToggle:Colorpicker({
+            Name = "Color 1",
+            Default = z(128, 18, 255),
+            Flag = "circle_color1",
+            Callback = function(color)
+                if _G.CircleFramework then
+                    _G.CircleFramework.c1 = color
+                end
+            end
+        })
+        
+        -- Circle Color 2
+        _targetCircleToggle:Colorpicker({
+            Name = "Color 2",
+            Default = z(255, 0, 128),
+            Flag = "circle_color2",
+            Callback = function(color)
+                if _G.CircleFramework then
+                    _G.CircleFramework.c2 = color
+                end
+            end
+        })
+        
+        -- Circle Color 3
+        _targetCircleToggle:Colorpicker({
+            Name = "Color 3",
+            Default = z(0, 200, 255),
+            Flag = "circle_color3",
+            Callback = function(color)
+                if _G.CircleFramework then
+                    _G.CircleFramework.c3 = color
+                end
+            end
+        })
+        
+        -- Circle Color 4
+        _targetCircleToggle:Colorpicker({
+            Name = "Color 4",
+            Default = z(255, 255, 0),
+            Flag = "circle_color4",
+            Callback = function(color)
+                if _G.CircleFramework then
+                    _G.CircleFramework.c4 = color
+                end
+            end
+        })
+        
+        -- Snapline Toggle
+        local _targetSnaplineToggle = targetSection:Toggle({
+            Name = "Snapline",
+            Default = false,
+            Flag = "target_snapline",
+            Callback = function(value)
+                if _G.SnaplineFramework then
+                    _G.SnaplineFramework:SetEnabled(value)
+                end
+            end
+        })
+        
+        -- Snapline Origin Dropdown (размещен сразу после Toggle, как в resolver type)
+        local _snaplineOriginDropdown = targetSection:Dropdown({
+            Name = "Origin",
+            Items = {"Bot", "Top", "Center", "Mouse"},
+            Default = "Center",
+            Flag = "snapline_origin",
+            Callback = function(value)
+                if _G.SnaplineFramework then
+                    _G.SnaplineFramework:SetOrigin(v(value))
+                end
+            end
+        })
+        
+        -- Snapline Color
+        _targetSnaplineToggle:Colorpicker({
+            Name = "Color",
+            Default = z(255, 255, 255),
+            Alpha = 1.0,
+            Flag = "snapline_color",
+            Callback = function(color, alpha)
+                if _G.SnaplineFramework then
+                    _G.SnaplineFramework:SetColor(color)
+                    _G.SnaplineFramework:SetTransparency(alpha or 1.0)
+                end
+            end
+        })
+        
+        -- Snapline Outline Color
+        _targetSnaplineToggle:Colorpicker({
+            Name = "Outline Color",
+            Default = z(0, 0, 0),
+            Alpha = 1.0,
+            Flag = "snapline_outline_color",
+            Callback = function(color, alpha)
+                if _G.SnaplineFramework then
+                    _G.SnaplineFramework:SetOutlineColor(color)
+                    _G.SnaplineFramework:SetOutlineTransparency(alpha or 1.0)
+                end
+            end
+        })
+        
+    end
+    
+    do -- OnTargetDamaged Section
+        local onTargetDamagedSection = N:Section({Name = "OnTargetDamaged", Side = 1})
+        
+        -- Chams Toggle
+        local _chamsToggle = onTargetDamagedSection:Toggle({
+            Name = "Chams",
+            Default = false,
+            Flag = "hit_chams",
+            Callback = function(value)
+                if _G.HitChamsFramework then
+                    _G.HitChamsFramework:SetEnabled(value)
+                end
+            end
+        })
+        
+        -- Chams Color Picker
+        _chamsToggle:Colorpicker({
+            Name = "Color",
+            Default = z(255, 0, 0),
+            Alpha = 0.0,
+            Flag = "hit_chams_color",
+            Callback = function(color, alpha)
+                -- Сохраняем цвет и прозрачность в флаги
+                K.Flags["hit_chams_color"] = color
+                K.Flags["hit_chams_alpha"] = alpha
+            end
+        })
+        
+        -- Chams Material Dropdown
+        local _chamsMaterialDropdown = onTargetDamagedSection:Dropdown({
+            Name = "Material",
+            Items = {"Neon", "ForceField", "Glass", "SmoothPlastic", "Plastic", "Metal"},
+            Default = "Neon",
+            Flag = "hit_chams_material",
+            Callback = function(value)
+                K.Flags["hit_chams_material"] = value
+            end
+        })
+        
+        -- HitSounds Toggle
+        local _hitSoundsToggle = onTargetDamagedSection:Toggle({
+            Name = "HitSounds",
+            Default = false,
+            Flag = "hit_sounds",
+            Callback = function(value)
+                -- Создаем папку для звуков при включении
+                if value and _G.TargetingFramework and _G.TargetingFramework.utility then
+                    _G.TargetingFramework.utility:createSoundsFolder()
+                end
+            end
+        })
+        
+        -- HitSounds Selection Dropdown
+        local _hitSoundsSelectionDropdown = onTargetDamagedSection:Dropdown({
+            Name = "Sound",
+            Items = availableSounds,
+            Default = availableSounds[1] or "1",
+            Flag = "hit_sounds_selection",
+            Callback = function(value)
+                K.Flags["hit_sounds_selection"] = value
+            end
+        })
+        
+        -- HitSounds Volume Slider
+        local _hitSoundsVolumeSlider = onTargetDamagedSection:Slider({
+            Name = "Volume",
+            Min = 0,
+            Max = 10,
+            Default = 0.5,
+            Suffix = "",
+            Decimals = 0.01,
+            Flag = "hit_sounds_volume",
+            Callback = function(value)
+                K.Flags["hit_sounds_volume"] = value
+            end
+        })
+        
+        -- HitSounds Pitch Slider
+        local _hitSoundsPitchSlider = onTargetDamagedSection:Slider({
+            Name = "Pitch",
+            Min = 0.1,
+            Max = 3.0,
+            Default = 1.0,
+            Suffix = "",
+            Decimals = 0.01,
+            Flag = "hit_sounds_pitch",
+            Callback = function(value)
+                K.Flags["hit_sounds_pitch"] = value
+            end
+        })
+        
+    end
+    
+    do -- Stuff Section
+        local stuffSection = N:Section({Name = "Stuff", Side = 2})
+        
+        -- Aura utility functions
+        local aura_utility = {}
+        
+        -- Aura система
+        local aura_state = {
+            enabled = false,
+            mode = "Lighting",
+            color = z(31, 226, 130), -- Цвет ауры по умолчанию
+            attachments = {},
+            beams = {},
+            particle_emitters = {},
+            cleanup_connections = {}
+        }
+        
+        function aura_utility:cleanup()
+            -- Отключаем все соединения
+            for _, connection in pairs(aura_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            aura_state.cleanup_connections = {}
+            
+            -- Удаляем Lighting элементы
+            if aura_state.particle_emitter then
+                aura_state.particle_emitter:Destroy()
+                aura_state.particle_emitter = nil
+            end
+            
+            if aura_state.flash_emitter then
+                aura_state.flash_emitter:Destroy()
+                aura_state.flash_emitter = nil
+            end
+            
+            if aura_state.attachment then
+                aura_state.attachment:Destroy()
+                aura_state.attachment = nil
+            end
+            
+            -- Удаляем FrostBlades элементы
+            for _, beam in pairs(aura_state.beams) do
+                if beam then
+                    beam:Destroy()
+                end
+            end
+            aura_state.beams = {}
+            
+            for _, attachment in pairs(aura_state.attachments) do
+                if attachment then
+                    attachment:Destroy()
+                end
+            end
+            aura_state.attachments = {}
+            
+            for _, emitter in pairs(aura_state.particle_emitters) do
+                if emitter then
+                    emitter:Destroy()
+                end
+            end
+            aura_state.particle_emitters = {}
+        end
+        
+        function aura_utility:createAura()
+            local localPlayer = g
+            if not localPlayer or not localPlayer.Character then
+                return
+            end
+            
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                return
+            end
+            
+            -- Очищаем предыдущую ауру
+            self:cleanup()
+            
+            -- Используем кастомный цвет ауры
+            local auraColor = aura_state.color
+            
+            -- Создаем ауру в зависимости от режима
+            if aura_state.mode == "Lighting" then
+                self:createLightingAura(hrp, auraColor)
+            elseif aura_state.mode == "FrostBlades" then
+                self:createFrostBladesAura(hrp, auraColor)
+            elseif aura_state.mode == "Charge" then
+                self:createChargeAura(hrp, auraColor)
+            elseif aura_state.mode == "Atomic" then
+                self:createAtomicAura(hrp, auraColor)
+            end
+            
+            -- Подключаемся к событиям персонажа
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function aura_utility:createLightingAura(hrp, accentColor)
+            -- Создаем RootAttachment
+            local rootAttachment = Instance.new("Attachment")
+            rootAttachment.Name = "RootAttachment"
+            rootAttachment.Axis = B(1, 0, 0)
+            rootAttachment.CFrame = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            rootAttachment.Orientation = B(-0, 0, 0)
+            rootAttachment.Position = B(0, 0, 0)
+            rootAttachment.SecondaryAxis = B(0, 1, 0)
+            rootAttachment.Visible = false
+            rootAttachment.Parent = hrp
+            
+            -- Создаем основной ParticleEmitter
+            local particleEmitter = Instance.new("ParticleEmitter")
+            particleEmitter.Name = "ParticleEmitter"
+            particleEmitter.Acceleration = B(0, 0, 0)
+            particleEmitter.Brightness = 1
+            particleEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            particleEmitter.Drag = 0
+            particleEmitter.EmissionDirection = Enum.NormalId.Top
+            particleEmitter.Enabled = true
+            particleEmitter.FlipbookFramerate = NumberRange.new(20, 20)
+            particleEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid2x2
+            particleEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            particleEmitter.FlipbookStartRandom = true
+            particleEmitter.Lifetime = NumberRange.new(0.15, 0.15)
+            particleEmitter.LightEmission = 1
+            particleEmitter.LightInfluence = 0
+            particleEmitter.LockedToPart = true
+            particleEmitter.Orientation = Enum.ParticleOrientation.FacingCamera
+            particleEmitter.Rate = 4
+            particleEmitter.RotSpeed = NumberRange.new(0, 0)
+            particleEmitter.Rotation = NumberRange.new(-180, 180)
+            particleEmitter.Shape = Enum.ParticleEmitterShape.Box
+            particleEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            particleEmitter.ShapePartial = 1
+            particleEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            particleEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 2)}
+            particleEmitter.Speed = NumberRange.new(0.01, 0.01)
+            particleEmitter.SpreadAngle = Vector2.new(0, 0)
+            particleEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            particleEmitter.Texture = "http://www.roblox.com/asset/?id=12800314277"
+            particleEmitter.TimeScale = 1
+            particleEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            particleEmitter.VelocityInheritance = 0
+            particleEmitter.ZOffset = 2
+            particleEmitter.Parent = rootAttachment
+            
+            -- Создаем Flash ParticleEmitter
+            local flashEmitter = Instance.new("ParticleEmitter")
+            flashEmitter.Name = "Flash"
+            flashEmitter.Acceleration = B(0, 0, 0)
+            flashEmitter.Brightness = 1
+            flashEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            flashEmitter.Drag = 0
+            flashEmitter.EmissionDirection = Enum.NormalId.Top
+            flashEmitter.Enabled = true
+            flashEmitter.FlipbookFramerate = NumberRange.new(20, 20)
+            flashEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+            flashEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            flashEmitter.FlipbookStartRandom = false
+            flashEmitter.Lifetime = NumberRange.new(0.3, 0.6)
+            flashEmitter.LightEmission = 0
+            flashEmitter.LightInfluence = 0
+            flashEmitter.LockedToPart = true
+            flashEmitter.Orientation = Enum.ParticleOrientation.FacingCamera
+            flashEmitter.Rate = 3
+            flashEmitter.RotSpeed = NumberRange.new(0, 0)
+            flashEmitter.Rotation = NumberRange.new(-360, 360)
+            flashEmitter.Shape = Enum.ParticleEmitterShape.Box
+            flashEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            flashEmitter.ShapePartial = 1
+            flashEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            flashEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 2)}
+            flashEmitter.Speed = NumberRange.new(0, 0)
+            flashEmitter.SpreadAngle = Vector2.new(-360, 360)
+            flashEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            flashEmitter.Texture = "rbxassetid://11372587580"
+            flashEmitter.TimeScale = 1
+            flashEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            flashEmitter.VelocityInheritance = 0
+            flashEmitter.ZOffset = 1
+            flashEmitter.Parent = rootAttachment
+            
+            -- Сохраняем ссылки
+            aura_state.attachment = rootAttachment
+            aura_state.particle_emitter = particleEmitter
+            aura_state.flash_emitter = flashEmitter
+        end
+        
+        function aura_utility:createFrostBladesAura(hrp, accentColor)
+            local attachments = {}
+            local beams = {}
+            local emitters = {}
+            
+            -- Создаем RootAttachment
+            local rootAttachment = Instance.new("Attachment")
+            rootAttachment.Name = "RootAttachment"
+            rootAttachment.Axis = B(1, 0, 0)
+            rootAttachment.CFrame = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            rootAttachment.Orientation = B(-0, 0, 0)
+            rootAttachment.Position = B(0, 0, 0)
+            rootAttachment.SecondaryAxis = B(0, 1, 0)
+            rootAttachment.Visible = false
+            rootAttachment.Parent = hrp
+            p(attachments, rootAttachment)
+            
+            -- Создаем bottom attachment
+            local bottomAttachment = Instance.new("Attachment")
+            bottomAttachment.Name = "bottom"
+            bottomAttachment.Axis = B(1, 0, 0)
+            bottomAttachment.CFrame = C(0, -3, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            bottomAttachment.Orientation = B(-0, 0, 0)
+            bottomAttachment.Position = B(0, -3, 0)
+            bottomAttachment.SecondaryAxis = B(0, 1, 0)
+            bottomAttachment.Visible = false
+            bottomAttachment.Parent = hrp
+            p(attachments, bottomAttachment)
+            
+            -- Создаем whirl ParticleEmitter на bottom
+            local whirlEmitter = Instance.new("ParticleEmitter")
+            whirlEmitter.Name = "whirl"
+            whirlEmitter.Acceleration = B(0, 0, 0)
+            whirlEmitter.Brightness = 5.199999809265137
+            whirlEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            whirlEmitter.Drag = 0
+            whirlEmitter.EmissionDirection = Enum.NormalId.Top
+            whirlEmitter.Enabled = true
+            whirlEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            whirlEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            whirlEmitter.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            whirlEmitter.FlipbookStartRandom = false
+            whirlEmitter.Lifetime = NumberRange.new(2, 2)
+            whirlEmitter.LightEmission = 0.15000000596046448
+            whirlEmitter.LightInfluence = 0
+            whirlEmitter.LockedToPart = true
+            whirlEmitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            whirlEmitter.Rate = 2
+            whirlEmitter.RotSpeed = NumberRange.new(400, 400)
+            whirlEmitter.Rotation = NumberRange.new(0, 90)
+            whirlEmitter.Shape = Enum.ParticleEmitterShape.Box
+            whirlEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            whirlEmitter.ShapePartial = 1
+            whirlEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            whirlEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 3)}
+            whirlEmitter.Speed = NumberRange.new(1.5, 1.5)
+            whirlEmitter.SpreadAngle = Vector2.new(5, 5)
+            whirlEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            whirlEmitter.Texture = "rbxassetid://9098555411"
+            whirlEmitter.TimeScale = 1
+            whirlEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.153906, 0), NumberSequenceKeypoint.new(0.847641, 0), NumberSequenceKeypoint.new(1, 1)}
+            whirlEmitter.VelocityInheritance = 0
+            whirlEmitter.ZOffset = 0
+            whirlEmitter.Parent = bottomAttachment
+            p(emitters, whirlEmitter)
+            
+            -- Создаем specs ParticleEmitter на bottom
+            local specsEmitter = Instance.new("ParticleEmitter")
+            specsEmitter.Name = "specs"
+            specsEmitter.Acceleration = B(0, 3, 0)
+            specsEmitter.Brightness = 10
+            specsEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            specsEmitter.Drag = 0
+            specsEmitter.EmissionDirection = Enum.NormalId.Top
+            specsEmitter.Enabled = true
+            specsEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            specsEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            specsEmitter.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            specsEmitter.FlipbookStartRandom = false
+            specsEmitter.Lifetime = NumberRange.new(1.5, 1.8)
+            specsEmitter.LightEmission = 1
+            specsEmitter.LightInfluence = 0
+            specsEmitter.LockedToPart = true
+            specsEmitter.Orientation = Enum.ParticleOrientation.FacingCamera
+            specsEmitter.Rate = 20
+            specsEmitter.RotSpeed = NumberRange.new(1000, 1000)
+            specsEmitter.Rotation = NumberRange.new(0, 0)
+            specsEmitter.Shape = Enum.ParticleEmitterShape.Box
+            specsEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            specsEmitter.ShapePartial = 1
+            specsEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            specsEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.594, 0.1), NumberSequenceKeypoint.new(1, 0)}
+            specsEmitter.Speed = NumberRange.new(3, 3)
+            specsEmitter.SpreadAngle = Vector2.new(90, 90)
+            specsEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            specsEmitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+            specsEmitter.TimeScale = 1
+            specsEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.160866, 1), NumberSequenceKeypoint.new(0.167827, 0), NumberSequenceKeypoint.new(1, 0)}
+            specsEmitter.VelocityInheritance = 0
+            specsEmitter.ZOffset = 0
+            specsEmitter.Parent = bottomAttachment
+            p(emitters, specsEmitter)
+            
+            -- Создаем en attachments (5 штук)
+            local enAttachments = {}
+            local enPositions = {
+                {-3.5, 3.5, -2.5},
+                {-4.5, 2, 3},
+                {-0.0999984741, 4, 3.19999695},
+                {3.89999771, 4.79999971, 2},
+                {3.29999924, 2.79999971, -2.19999695}
+            }
+            
+            for i = 1, 5 do
+                local pos = enPositions[i]
+                local enAttachment = Instance.new("Attachment")
+                enAttachment.Name = "en" .. i
+                enAttachment.Axis = B(0, 0, -1)
+                enAttachment.CFrame = C(pos[1], pos[2], pos[3], 0, 0, 1, 0, 1, -0, -1, 0, 0)
+                enAttachment.Orientation = B(-0, 90, 0)
+                enAttachment.Position = B(pos[1], pos[2], pos[3])
+                enAttachment.SecondaryAxis = B(0, 1, 0)
+                enAttachment.Visible = false
+                enAttachment.Parent = hrp
+                p(attachments, enAttachment)
+                enAttachments[i] = enAttachment
+            end
+            
+            -- Создаем st attachments (5 штук)
+            local stAttachments = {}
+            local stPositions = {
+                {-1.49996948, -2.99999428, -0.999954224},
+                {-1.5, -3, 1},
+                {0.299999237, -3, 1.79999542},
+                {2.09999847, -3, 0.399993896},
+                {1.29999924, -3, -1.40000916}
+            }
+            
+            for i = 1, 5 do
+                local pos = stPositions[i]
+                local stAttachment = Instance.new("Attachment")
+                stAttachment.Name = "st" .. i
+                stAttachment.Axis = B(0, 0, -1)
+                stAttachment.CFrame = C(pos[1], pos[2], pos[3], 0, 0, 1, 0, 1, -0, -1, 0, 0)
+                stAttachment.Orientation = B(-0, 90, 0)
+                stAttachment.Position = B(pos[1], pos[2], pos[3])
+                stAttachment.SecondaryAxis = B(0, 1, 0)
+                stAttachment.Visible = false
+                stAttachment.Parent = hrp
+                p(attachments, stAttachment)
+                stAttachments[i] = stAttachment
+            end
+            
+            -- Создаем end1 и start1 attachments
+            local endAttachment = Instance.new("Attachment")
+            endAttachment.Name = "end1"
+            endAttachment.Axis = B(0, -1, 0)
+            endAttachment.CFrame = C(0, -2.88535929, -3.5, 0, -1, -4.37113883e-08, -1, 0, -0, 0, 4.37113883e-08, -1)
+            endAttachment.Orientation = B(-0, -179.99998474121094, -90)
+            endAttachment.Position = B(0, -2.885359287261963, -3.5)
+            endAttachment.SecondaryAxis = B(-1, -4.371138828673793e-08, 1.5099580252808664e-07)
+            endAttachment.Visible = false
+            endAttachment.Parent = hrp
+            p(attachments, endAttachment)
+            
+            local startAttachment = Instance.new("Attachment")
+            startAttachment.Name = "start1"
+            startAttachment.Axis = B(0, -1, 0)
+            startAttachment.CFrame = C(0, -2.88535929, 3.5, 0, -1, -4.37113883e-08, -1, 0, -0, 0, 4.37113883e-08, -1)
+            startAttachment.Orientation = B(-0, -179.99998474121094, -90)
+            startAttachment.Position = B(0, -2.885359287261963, 3.5)
+            startAttachment.SecondaryAxis = B(-1, -4.371138828673793e-08, 1.5099580252808664e-07)
+            startAttachment.Visible = false
+            startAttachment.Parent = hrp
+            p(attachments, startAttachment)
+            
+            -- Создаем blade beams (5 штук)
+            for i = 1, 5 do
+                local bladeBeam = Instance.new("Beam")
+                bladeBeam.Name = "blade" .. i
+                bladeBeam.Attachment0 = enAttachments[i]
+                bladeBeam.Attachment1 = stAttachments[i]
+                bladeBeam.Brightness = 1
+                bladeBeam.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, accentColor),
+                    ColorSequenceKeypoint.new(1, accentColor)
+                }
+                bladeBeam.CurveSize0 = 0
+                bladeBeam.CurveSize1 = 0
+                bladeBeam.Enabled = true
+                bladeBeam.FaceCamera = true
+                bladeBeam.LightEmission = 1
+                bladeBeam.LightInfluence = 1
+                bladeBeam.Segments = 10
+                bladeBeam.Texture = "rbxassetid://14050932611"
+                bladeBeam.TextureLength = 1
+                bladeBeam.TextureMode = Enum.TextureMode.Stretch
+                bladeBeam.TextureSpeed = 0
+                bladeBeam.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+                bladeBeam.Width0 = 0
+                bladeBeam.Width1 = 8
+                bladeBeam.ZOffset = 0
+                bladeBeam.Parent = hrp
+                p(beams, bladeBeam)
+            end
+            
+            -- Создаем energy beams (5 штук)
+            for i = 1, 5 do
+                local energyBeam = Instance.new("Beam")
+                energyBeam.Name = "energy" .. i
+                energyBeam.Attachment0 = stAttachments[i]
+                energyBeam.Attachment1 = enAttachments[i]
+                energyBeam.Brightness = 6.534999847412109
+                energyBeam.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, accentColor),
+                    ColorSequenceKeypoint.new(1, accentColor)
+                }
+                energyBeam.CurveSize0 = 0
+                energyBeam.CurveSize1 = 0
+                energyBeam.Enabled = true
+                energyBeam.FaceCamera = true
+                energyBeam.LightEmission = 1
+                energyBeam.LightInfluence = 0
+                energyBeam.Segments = 10
+                energyBeam.Texture = "http://www.roblox.com/asset/?id=6365212829"
+                energyBeam.TextureLength = 10
+                energyBeam.TextureMode = Enum.TextureMode.Static
+                energyBeam.TextureSpeed = 1
+                energyBeam.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.845321, 0.01875), NumberSequenceKeypoint.new(0.887858, 1), NumberSequenceKeypoint.new(1, 1)}
+                energyBeam.Width0 = 0.5
+                energyBeam.Width1 = 0.5
+                energyBeam.ZOffset = 0.10000000149011612
+                energyBeam.Parent = hrp
+                p(beams, energyBeam)
+            end
+            
+            -- Создаем glow beam
+            local glowBeam = Instance.new("Beam")
+            glowBeam.Name = "glow"
+            glowBeam.Attachment0 = endAttachment
+            glowBeam.Attachment1 = startAttachment
+            glowBeam.Brightness = 2.265000104904175
+            glowBeam.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            glowBeam.CurveSize0 = 0
+            glowBeam.CurveSize1 = 0
+            glowBeam.Enabled = true
+            glowBeam.FaceCamera = false
+            glowBeam.LightEmission = 1
+            glowBeam.LightInfluence = 0
+            glowBeam.Segments = 10
+            glowBeam.Texture = "http://www.roblox.com/asset/?id=4464710465"
+            glowBeam.TextureLength = 1
+            glowBeam.TextureMode = Enum.TextureMode.Stretch
+            glowBeam.TextureSpeed = 0
+            glowBeam.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0.5)}
+            glowBeam.Width0 = 8
+            glowBeam.Width1 = 8
+            glowBeam.ZOffset = 0
+            glowBeam.Parent = hrp
+            p(beams, glowBeam)
+            
+            -- Сохраняем ссылки
+            aura_state.attachments = attachments
+            aura_state.beams = beams
+            aura_state.particle_emitters = emitters
+        end
+        
+        function aura_utility:createChargeAura(hrp, accentColor)
+            local attachments = {}
+            local emitters = {}
+            
+            -- Создаем Main attachment
+            local mainAttachment = Instance.new("Attachment")
+            mainAttachment.Name = "Main"
+            mainAttachment.Axis = B(1, 0, 0)
+            mainAttachment.CFrame = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            mainAttachment.Orientation = B(-0, 0, 0)
+            mainAttachment.Position = B(0, 0, 0)
+            mainAttachment.SecondaryAxis = B(0, 1, 0)
+            mainAttachment.Visible = false
+            mainAttachment.Parent = hrp
+            p(attachments, mainAttachment)
+            
+            -- Создаем Energy1 ParticleEmitter
+            local energy1Emitter = Instance.new("ParticleEmitter")
+            energy1Emitter.Name = "Energy1"
+            energy1Emitter.Acceleration = B(0, 0, 0)
+            energy1Emitter.Brightness = 25
+            energy1Emitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            energy1Emitter.Drag = 0
+            energy1Emitter.EmissionDirection = Enum.NormalId.Top
+            energy1Emitter.Enabled = true
+            energy1Emitter.FlipbookFramerate = NumberRange.new(1, 1)
+            energy1Emitter.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+            energy1Emitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            energy1Emitter.FlipbookStartRandom = false
+            energy1Emitter.Lifetime = NumberRange.new(0.3, 0.3)
+            energy1Emitter.LightEmission = 1
+            energy1Emitter.LightInfluence = 0
+            energy1Emitter.LockedToPart = true
+            energy1Emitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            energy1Emitter.Rate = 20
+            energy1Emitter.RotSpeed = NumberRange.new(0, 0)
+            energy1Emitter.Rotation = NumberRange.new(-360, 360)
+            energy1Emitter.Shape = Enum.ParticleEmitterShape.Box
+            energy1Emitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            energy1Emitter.ShapePartial = 1
+            energy1Emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            energy1Emitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 5), NumberSequenceKeypoint.new(1, 5)}
+            energy1Emitter.Speed = NumberRange.new(0.001, 0.001)
+            energy1Emitter.SpreadAngle = Vector2.new(75, 75)
+            energy1Emitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            energy1Emitter.Texture = "rbxassetid://15041986621"
+            energy1Emitter.TimeScale = 1
+            energy1Emitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            energy1Emitter.VelocityInheritance = 0
+            energy1Emitter.ZOffset = 1
+            energy1Emitter.Parent = mainAttachment
+            p(emitters, energy1Emitter)
+            
+            -- Создаем Energy2 ParticleEmitter
+            local energy2Emitter = Instance.new("ParticleEmitter")
+            energy2Emitter.Name = "Energy2"
+            energy2Emitter.Acceleration = B(0, 0, 0)
+            energy2Emitter.Brightness = 25
+            energy2Emitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            energy2Emitter.Drag = 0
+            energy2Emitter.EmissionDirection = Enum.NormalId.Top
+            energy2Emitter.Enabled = true
+            energy2Emitter.FlipbookFramerate = NumberRange.new(1, 1)
+            energy2Emitter.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+            energy2Emitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            energy2Emitter.FlipbookStartRandom = false
+            energy2Emitter.Lifetime = NumberRange.new(0.3, 0.3)
+            energy2Emitter.LightEmission = 1
+            energy2Emitter.LightInfluence = 0
+            energy2Emitter.LockedToPart = true
+            energy2Emitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            energy2Emitter.Rate = 20
+            energy2Emitter.RotSpeed = NumberRange.new(0, 0)
+            energy2Emitter.Rotation = NumberRange.new(-360, 360)
+            energy2Emitter.Shape = Enum.ParticleEmitterShape.Box
+            energy2Emitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            energy2Emitter.ShapePartial = 1
+            energy2Emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            energy2Emitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 5), NumberSequenceKeypoint.new(1, 5)}
+            energy2Emitter.Speed = NumberRange.new(0.001, 0.001)
+            energy2Emitter.SpreadAngle = Vector2.new(75, 75)
+            energy2Emitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            energy2Emitter.Texture = "rbxassetid://15041986460"
+            energy2Emitter.TimeScale = 1
+            energy2Emitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            energy2Emitter.VelocityInheritance = 0
+            energy2Emitter.ZOffset = 1
+            energy2Emitter.Parent = mainAttachment
+            p(emitters, energy2Emitter)
+            
+            -- Сохраняем ссылки
+            aura_state.attachments = attachments
+            aura_state.beams = {}
+            aura_state.particle_emitters = emitters
+        end
+        
+        function aura_utility:createAtomicAura(hrp, accentColor)
+            local attachments = {}
+            local emitters = {}
+            
+            -- Создаем Attachment для BlackSwirl
+            local atomicAttachment = Instance.new("Attachment")
+            atomicAttachment.Name = "AtomicAttachment"
+            atomicAttachment.Parent = hrp
+            p(attachments, atomicAttachment)
+            
+            -- Создаем BlackSwirl ParticleEmitter
+            local blackSwirl = Instance.new("ParticleEmitter")
+            blackSwirl.Name = "BlackSwirl"
+            blackSwirl.Acceleration = B(0, 0, 0)
+            blackSwirl.Brightness = 1
+            blackSwirl.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, accentColor),
+                ColorSequenceKeypoint.new(1, accentColor)
+            }
+            blackSwirl.Drag = 0
+            blackSwirl.EmissionDirection = Enum.NormalId.Top
+            blackSwirl.Enabled = true
+            blackSwirl.FlipbookFramerate = NumberRange.new(1, 1)
+            blackSwirl.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            blackSwirl.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            blackSwirl.FlipbookStartRandom = false
+            blackSwirl.Lifetime = NumberRange.new(3, 3)
+            blackSwirl.LightEmission = 1
+            blackSwirl.LightInfluence = 0
+            blackSwirl.LockedToPart = true
+            blackSwirl.Orientation = Enum.ParticleOrientation.VelocityParallel
+            blackSwirl.Rate = 5
+            blackSwirl.RotSpeed = NumberRange.new(360, 360)
+            blackSwirl.Rotation = NumberRange.new(-180, 180)
+            blackSwirl.Shape = Enum.ParticleEmitterShape.Box
+            blackSwirl.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            blackSwirl.ShapePartial = 1
+            blackSwirl.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            blackSwirl.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 4), NumberSequenceKeypoint.new(1, 4)}
+            blackSwirl.Speed = NumberRange.new(0.01, 0.01)
+            blackSwirl.SpreadAngle = Vector2.new(360, -360)
+            blackSwirl.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            blackSwirl.Texture = "rbxassetid://10558425570"
+            blackSwirl.TimeScale = 1
+            blackSwirl.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            blackSwirl.VelocityInheritance = 0
+            blackSwirl.ZOffset = 0.2
+            blackSwirl.Parent = atomicAttachment
+            p(emitters, blackSwirl)
+            
+            -- Сохраняем ссылки
+            aura_state.attachments = attachments
+            aura_state.beams = {}
+            aura_state.particle_emitters = emitters
+        end
+        
+        function aura_utility:setupCharacterEvents(localPlayer)
+            -- Подключаемся к событию смерти персонажа
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local diedConnection = humanoid.Died:Connect(function()
+                    -- Очищаем только визуальные элементы, но не отключаем систему
+                    for _, attachment in pairs(aura_state.attachments) do
+                        if attachment then
+                            attachment:Destroy()
+                        end
+                    end
+                    for _, beam in pairs(aura_state.beams) do
+                        if beam then
+                            beam:Destroy()
+                        end
+                    end
+                    for _, emitter in pairs(aura_state.particle_emitters) do
+                        if emitter then
+                            emitter:Destroy()
+                        end
+                    end
+                    aura_state.attachments = {}
+                    aura_state.beams = {}
+                    aura_state.particle_emitters = {}
+                end)
+                p(aura_state.cleanup_connections, diedConnection)
+            end
+        end
+        
+        function aura_utility:setEnabled(enabled)
+            aura_state.enabled = enabled
+            
+            if enabled then
+                self:createAura()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function aura_utility:setMode(mode)
+            aura_state.mode = mode
+            
+            -- Если аура включена, пересоздаем ее с новым режимом
+            if aura_state.enabled then
+                self:createAura()
+            end
+        end
+        
+        function aura_utility:updateColor(newColor)
+            aura_state.color = newColor
+            
+            if aura_state.mode == "Lighting" then
+                -- Обновляем цвета для Lighting режима
+                if aura_state.particle_emitter then
+                    aura_state.particle_emitter.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, newColor),
+                        ColorSequenceKeypoint.new(1, newColor)
+                    }
+                end
+                
+                if aura_state.flash_emitter then
+                    aura_state.flash_emitter.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, newColor),
+                        ColorSequenceKeypoint.new(1, newColor)
+                    }
+                end
+            elseif aura_state.mode == "FrostBlades" then
+                -- Обновляем цвета для FrostBlades режима
+                for _, beam in pairs(aura_state.beams) do
+                    if beam then
+                        beam.Color = ColorSequence.new{
+                            ColorSequenceKeypoint.new(0, newColor),
+                            ColorSequenceKeypoint.new(1, newColor)
+                        }
+                    end
+                end
+                
+                for _, emitter in pairs(aura_state.particle_emitters) do
+                    if emitter then
+                        emitter.Color = ColorSequence.new{
+                            ColorSequenceKeypoint.new(0, newColor),
+                            ColorSequenceKeypoint.new(1, newColor)
+                        }
+                    end
+                end
+            elseif aura_state.mode == "Charge" then
+                -- Обновляем цвета для Charge режима
+                for _, emitter in pairs(aura_state.particle_emitters) do
+                    if emitter then
+                        emitter.Color = ColorSequence.new{
+                            ColorSequenceKeypoint.new(0, newColor),
+                            ColorSequenceKeypoint.new(1, newColor)
+                        }
+                    end
+                end
+            elseif aura_state.mode == "Atomic" then
+                -- Обновляем цвета для Atomic режима
+                for _, emitter in pairs(aura_state.particle_emitters) do
+                    if emitter then
+                        emitter.Color = ColorSequence.new{
+                            ColorSequenceKeypoint.new(0, newColor),
+                            ColorSequenceKeypoint.new(1, newColor)
+                        }
+                    end
+                end
+            end
+        end
+        
+        -- Aura Toggle
+        local auraToggle = stuffSection:Toggle({
+            Name = "Aura",
+            Default = false,
+            Flag = "aura_enabled",
+            Callback = function(value)
+                aura_utility:setEnabled(value)
+            end
+        })
+        
+        -- Aura Colorpicker
+        auraToggle:Colorpicker({
+            Name = "Aura Color",
+            Default = z(31, 226, 130), -- Зеленоватый цвет по умолчанию
+            Flag = "aura_color",
+            Callback = function(value)
+                aura_utility:updateColor(value)
+            end
+        })
+        
+        -- Aura Mode Dropdown
+        local _auraMode = stuffSection:Dropdown({
+            Name = "Aura Mode",
+            Items = {"Lighting", "FrostBlades", "Charge", "Atomic"},
+            Default = "Lighting",
+            Flag = "aura_mode",
+            Callback = function(value)
+                aura_state.mode = value
+                -- Если аура включена, пересоздаем её с новым режимом
+                if aura_state.enabled then
+                    aura_utility:setEnabled(false)
+                    task.wait(0.1)
+                    aura_utility:setEnabled(true)
+                end
+            end
+        })
+        
+        -- Глобальное подключение к событию CharacterAdded для аур
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if aura_state.enabled then
+                aura_utility:createAura()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if aura_state.enabled then
+                    aura_utility:createAura()
+                end
+            end)
+        end
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.AuraUtility = aura_utility
+        
+        -- Halo (Нимб) система
+        local halo_state = {
+            enabled = false,
+            color = z(255, 225, 0), -- Золотой цвет по умолчанию
+            attachment = nil,
+            particle_emitter = nil,
+            cleanup_connections = {}
+        }
+        
+        local halo_utility = {}
+        
+        function halo_utility:cleanup()
+            -- Удаляем attachment и particle emitter
+            if halo_state.attachment then
+                halo_state.attachment:Destroy()
+                halo_state.attachment = nil
+            end
+            
+            if halo_state.particle_emitter then
+                halo_state.particle_emitter:Destroy()
+                halo_state.particle_emitter = nil
+            end
+            
+            -- Отключаем все подключения
+            for _, connection in pairs(halo_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            halo_state.cleanup_connections = {}
+        end
+        
+        function halo_utility:createHalo()
+            local localPlayer = g
+            if not localPlayer.Character then
+                return
+            end
+            
+            local head = localPlayer.Character:FindFirstChild("Head")
+            if not head then
+                return
+            end
+            
+            -- Очищаем предыдущий нимб
+            self:cleanup()
+            
+            -- Создаем Attachment для нимба
+            local haloAttachment = Instance.new("Attachment")
+            haloAttachment.Name = "HaloAttachment"
+            haloAttachment.Position = B(0, 1.4, 0) -- Позиция над головой
+            haloAttachment.Orientation = B(0, 0, 7) -- Наклон на 6 градусов
+            haloAttachment.Parent = head
+            halo_state.attachment = haloAttachment
+            
+            -- Создаем ParticleEmitter для нимба
+            local haloEmitter = Instance.new("ParticleEmitter")
+            haloEmitter.Name = "Halo"
+            haloEmitter.Acceleration = B(0, 0, 0)
+            haloEmitter.Brightness = 1
+            haloEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, halo_state.color),
+                ColorSequenceKeypoint.new(1, halo_state.color)
+            }
+            haloEmitter.Drag = 0
+            haloEmitter.EmissionDirection = Enum.NormalId.Top
+            haloEmitter.Enabled = true
+            haloEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            haloEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            haloEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            haloEmitter.FlipbookStartRandom = false
+            haloEmitter.Lifetime = NumberRange.new(1.5, 1.5)
+            haloEmitter.LightEmission = 1
+            haloEmitter.LightInfluence = 0
+            haloEmitter.LockedToPart = true
+            haloEmitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            haloEmitter.Rate = 3
+            haloEmitter.RotSpeed = NumberRange.new(-360, -360)
+            haloEmitter.Rotation = NumberRange.new(-360, 360)
+            haloEmitter.Shape = Enum.ParticleEmitterShape.Box
+            haloEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            haloEmitter.ShapePartial = 1
+            haloEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            haloEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 2.6), NumberSequenceKeypoint.new(1, 2.6)}
+            haloEmitter.Speed = NumberRange.new(0.001, 0.001)
+            haloEmitter.SpreadAngle = Vector2.new(3, 2)
+            haloEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.01), NumberSequenceKeypoint.new(1, 0.01)}
+            haloEmitter.Texture = "rbxassetid://7185003058"
+            haloEmitter.TimeScale = 1
+            haloEmitter.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.293, 0),
+                NumberSequenceKeypoint.new(0.497, 0),
+                NumberSequenceKeypoint.new(0.701, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            }
+            haloEmitter.VelocityInheritance = 0
+            haloEmitter.ZOffset = 0
+            haloEmitter.Parent = haloAttachment
+            halo_state.particle_emitter = haloEmitter
+            
+            -- Подключаемся к событиям персонажа
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function halo_utility:setupCharacterEvents(localPlayer)
+            -- Подключаемся к событию смерти персонажа
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local diedConnection = humanoid.Died:Connect(function()
+                    -- Очищаем только визуальные элементы
+                    if halo_state.attachment then
+                        halo_state.attachment:Destroy()
+                        halo_state.attachment = nil
+                    end
+                    if halo_state.particle_emitter then
+                        halo_state.particle_emitter:Destroy()
+                        halo_state.particle_emitter = nil
+                    end
+                end)
+                table.insert(halo_state.cleanup_connections, diedConnection)
+            end
+        end
+        
+        function halo_utility:setEnabled(enabled)
+            halo_state.enabled = enabled
+            
+            if enabled then
+                self:createHalo()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function halo_utility:updateColor(newColor)
+            halo_state.color = newColor
+            
+            -- Обновляем цвет существующего нимба
+            if halo_state.particle_emitter then
+                halo_state.particle_emitter.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, newColor),
+                    ColorSequenceKeypoint.new(1, newColor)
+                }
+            end
+        end
+        
+        -- Halo Toggle
+        local haloToggle = stuffSection:Toggle({
+            Name = "Halo",
+            Default = false,
+            Flag = "halo_enabled",
+            Callback = function(value)
+                halo_utility:setEnabled(value)
+            end
+        })
+        
+        -- Halo Colorpicker
+        haloToggle:Colorpicker({
+            Name = "Halo Color",
+            Default = z(255, 225, 0), -- Золотой цвет по умолчанию
+            Flag = "halo_color",
+            Callback = function(value)
+                halo_utility:updateColor(value)
+            end
+        })
+        
+        -- Глобальное подключение к событию CharacterAdded для нимба
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if halo_state.enabled then
+                halo_utility:createHalo()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if halo_state.enabled then
+                    halo_utility:createHalo()
+                end
+            end)
+        end
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.HaloUtility = halo_utility
+        
+        -- Snow система
+        local snow_state = {
+            enabled = false,
+            color = z(255, 255, 255), -- Белый цвет по умолчанию
+            part = nil,
+            particle_emitter = nil,
+            weld_constraint = nil,
+            cleanup_connections = {}
+        }
+        
+        local snow_utility = {}
+        
+        function snow_utility:cleanup()
+            -- Удаляем part и particle emitter
+            if snow_state.part then
+                snow_state.part:Destroy()
+                snow_state.part = nil
+            end
+            
+            if snow_state.particle_emitter then
+                snow_state.particle_emitter = nil
+            end
+            
+            if snow_state.weld_constraint then
+                snow_state.weld_constraint:Destroy()
+                snow_state.weld_constraint = nil
+            end
+            
+            -- Отключаем все подключения
+            for _, connection in pairs(snow_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            snow_state.cleanup_connections = {}
+        end
+        
+        function snow_utility:createSnow()
+            local localPlayer = g
+            if not localPlayer.Character then
+                return
+            end
+            
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                return
+            end
+            
+            -- Очищаем предыдущий снег
+            self:cleanup()
+            
+            -- Создаем Part для снега
+            local snowPart = Instance.new("Part")
+            snowPart.Name = "SnowPart"
+            snowPart.Anchored = false
+            snowPart.AssemblyAngularVelocity = B(0, 0, 0)
+            snowPart.AssemblyLinearVelocity = B(0, 0, 0)
+            snowPart.BackSurface = Enum.SurfaceType.Smooth
+            snowPart.BottomSurface = Enum.SurfaceType.Smooth
+            snowPart.BrickColor = BrickColor.new("Medium stone grey")
+            snowPart.CFrame = C(hrp.Position.X, hrp.Position.Y + 75, hrp.Position.Z)
+            snowPart.CanCollide = false
+            snowPart.CanQuery = false
+            snowPart.CanTouch = false
+            snowPart.CastShadow = false
+            snowPart.Color = z(0.639216, 0.635294, 0.647059)
+            snowPart.FrontSurface = Enum.SurfaceType.Smooth
+            snowPart.LeftSurface = Enum.SurfaceType.Smooth
+            snowPart.Locked = false
+            snowPart.Massless = true
+            snowPart.Material = Enum.Material.Plastic
+            snowPart.MaterialVariant = ""
+            snowPart.Orientation = B(0, 0, 0)
+            snowPart.PivotOffset = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            snowPart.Position = B(hrp.Position.X, hrp.Position.Y + 75, hrp.Position.Z)
+            snowPart.Reflectance = 0
+            snowPart.RightSurface = Enum.SurfaceType.Smooth
+            snowPart.RootPriority = 0
+            snowPart.Rotation = B(0, 0, 0)
+            snowPart.Size = B(200, 150, 200)
+            snowPart.TopSurface = Enum.SurfaceType.Smooth
+            snowPart.Transparency = 1
+            snowPart.Parent = workspace
+            snow_state.part = snowPart
+            
+            -- Создаем WeldConstraint для привязки к персонажу
+            local weldConstraint = Instance.new("WeldConstraint")
+            weldConstraint.Part0 = hrp
+            weldConstraint.Part1 = snowPart
+            weldConstraint.Parent = snowPart
+            snow_state.weld_constraint = weldConstraint
+            
+            -- Создаем ParticleEmitter для снега
+            local snowEmitter = Instance.new("ParticleEmitter")
+            snowEmitter.Name = "SnowEmitter"
+            snowEmitter.Acceleration = B(0, 0, 0)
+            snowEmitter.Brightness = 1.5
+            snowEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, snow_state.color),
+                ColorSequenceKeypoint.new(1, snow_state.color)
+            }
+            snowEmitter.Drag = 0
+            snowEmitter.EmissionDirection = Enum.NormalId.Top
+            snowEmitter.Enabled = true
+            snowEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            snowEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            snowEmitter.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            snowEmitter.FlipbookStartRandom = false
+            snowEmitter.Lifetime = NumberRange.new(2, 3)
+            snowEmitter.LightEmission = 1
+            snowEmitter.LightInfluence = 0
+            snowEmitter.LockedToPart = false
+            snowEmitter.Orientation = Enum.ParticleOrientation.VelocityParallel
+            snowEmitter.Rate = 1000
+            snowEmitter.RotSpeed = NumberRange.new(0, 0)
+            snowEmitter.Rotation = NumberRange.new(90, 90)
+            snowEmitter.Shape = Enum.ParticleEmitterShape.Box
+            snowEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward
+            snowEmitter.ShapePartial = 1
+            snowEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            snowEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0.7)}
+            snowEmitter.Speed = NumberRange.new(5, 5)
+            snowEmitter.SpreadAngle = Vector2.new(0, 0)
+            snowEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            snowEmitter.Texture = "rbxassetid://14197923174"
+            snowEmitter.TimeScale = 1
+            snowEmitter.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.498132, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            }
+            snowEmitter.VelocityInheritance = 0
+            snowEmitter.ZOffset = 1
+            snowEmitter.Parent = snowPart
+            snow_state.particle_emitter = snowEmitter
+            
+            -- Подключаемся к событиям персонажа
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function snow_utility:setupCharacterEvents(localPlayer)
+            -- Подключаемся к событию смерти персонажа
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local diedConnection = humanoid.Died:Connect(function()
+                    -- Очищаем только визуальные элементы
+                    if snow_state.part then
+                        snow_state.part:Destroy()
+                        snow_state.part = nil
+                    end
+                    if snow_state.particle_emitter then
+                        snow_state.particle_emitter = nil
+                    end
+                    if snow_state.weld_constraint then
+                        snow_state.weld_constraint:Destroy()
+                        snow_state.weld_constraint = nil
+                    end
+                end)
+                table.insert(snow_state.cleanup_connections, diedConnection)
+            end
+        end
+        
+        function snow_utility:setEnabled(enabled)
+            snow_state.enabled = enabled
+            
+            if enabled then
+                self:createSnow()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function snow_utility:updateColor(newColor)
+            snow_state.color = newColor
+            
+            -- Обновляем цвет существующего снега
+            if snow_state.particle_emitter then
+                snow_state.particle_emitter.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, newColor),
+                    ColorSequenceKeypoint.new(1, newColor)
+                }
+            end
+        end
+        
+        -- Snow Toggle
+        local snowToggle = stuffSection:Toggle({
+            Name = "Snow",
+            Default = false,
+            Flag = "snow_enabled",
+            Callback = function(value)
+                snow_utility:setEnabled(value)
+            end
+        })
+        
+        -- Snow Colorpicker
+        snowToggle:Colorpicker({
+            Name = "Snow Color",
+            Default = z(255, 255, 255), -- Белый цвет по умолчанию
+            Flag = "snow_color",
+            Callback = function(value)
+                snow_utility:updateColor(value)
+            end
+        })
+        
+        -- Глобальное подключение к событию CharacterAdded для снега
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if snow_state.enabled then
+                snow_utility:createSnow()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if snow_state.enabled then
+                    snow_utility:createSnow()
+                end
+            end)
+        end
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.SnowUtility = snow_utility
+        
+        -- Wings система
+        local wings_state = {
+            enabled = false,
+            color = z(255, 0, 0), -- Красный цвет по умолчанию
+            attachments = {},
+            particle_emitters = {},
+            cleanup_connections = {}
+        }
+        
+        local wings_utility = {}
+        
+        function wings_utility:cleanup()
+            -- Удаляем все attachments и particle emitters
+            for _, attachment in pairs(wings_state.attachments) do
+                if attachment then
+                    attachment:Destroy()
+                end
+            end
+            wings_state.attachments = {}
+            
+            for _, emitter in pairs(wings_state.particle_emitters) do
+                if emitter then
+                    emitter:Destroy()
+                end
+            end
+            wings_state.particle_emitters = {}
+            
+            -- Отключаем все подключения
+            for _, connection in pairs(wings_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            wings_state.cleanup_connections = {}
+        end
+        
+        function wings_utility:createWings()
+            local localPlayer = g
+            if not localPlayer.Character then
+                return
+            end
+            
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                return
+            end
+            
+            -- Очищаем предыдущие крылья
+            self:cleanup()
+            
+            local attachments = {}
+            local emitters = {}
+            
+            -- Создаем RootAttachment с ashes emitter
+            local rootAttachment = Instance.new("Attachment")
+            rootAttachment.Name = "WingsRootAttachment"
+            rootAttachment.Axis = B(1, 0, 0)
+            rootAttachment.CFrame = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            rootAttachment.Orientation = B(0, 0, 0)
+            rootAttachment.Position = B(0, 0, 0)
+            rootAttachment.SecondaryAxis = B(0, 1, 0)
+            rootAttachment.Visible = false
+            rootAttachment.Parent = hrp
+            p(attachments, rootAttachment)
+            
+            -- Создаем ashes emitter на RootAttachment
+            local ashesEmitter = Instance.new("ParticleEmitter")
+            ashesEmitter.Name = "ashes"
+            ashesEmitter.Acceleration = B(0, 0, 4)
+            ashesEmitter.Brightness = 2
+            ashesEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, wings_state.color),
+                ColorSequenceKeypoint.new(1, wings_state.color)
+            }
+            ashesEmitter.Drag = 0
+            ashesEmitter.EmissionDirection = Enum.NormalId.Top
+            ashesEmitter.Enabled = true
+            ashesEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            ashesEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            ashesEmitter.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            ashesEmitter.FlipbookStartRandom = false
+            ashesEmitter.Lifetime = NumberRange.new(2, 3)
+            ashesEmitter.LightEmission = 0.5
+            ashesEmitter.LightInfluence = 1
+            ashesEmitter.LockedToPart = false
+            ashesEmitter.Orientation = Enum.ParticleOrientation.FacingCamera
+            ashesEmitter.Rate = 10
+            ashesEmitter.RotSpeed = NumberRange.new(-100, 100)
+            ashesEmitter.Rotation = NumberRange.new(-180, 180)
+            ashesEmitter.Shape = Enum.ParticleEmitterShape.Box
+            ashesEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            ashesEmitter.ShapePartial = 1
+            ashesEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            ashesEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0.1)}
+            ashesEmitter.Speed = NumberRange.new(3, 3)
+            ashesEmitter.SpreadAngle = Vector2.new(70, 70)
+            ashesEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            ashesEmitter.Texture = "http://www.roblox.com/asset/?id=12222002958"
+            ashesEmitter.TimeScale = 1
+            ashesEmitter.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.498132, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            }
+            ashesEmitter.VelocityInheritance = 0
+            ashesEmitter.ZOffset = 0
+            ashesEmitter.Parent = rootAttachment
+            p(emitters, ashesEmitter)
+            
+            -- Создаем middle attachment (левое крыло)
+            local middleAttachment = Instance.new("Attachment")
+            middleAttachment.Name = "middle"
+            middleAttachment.Axis = B(-4.371138828673793e-08, 0, 1)
+            middleAttachment.CFrame = C(-2.20000005, 0.5, 2.29999995, -4.37113883e-08, 0, -1, 0, 1, 0, 1, 0, -4.37113883e-08)
+            middleAttachment.Orientation = B(0, -90, 0)
+            middleAttachment.Position = B(-2.20000005, 0.5, 2.29999995)
+            middleAttachment.SecondaryAxis = B(0, 1, 0)
+            middleAttachment.Visible = false
+            middleAttachment.Parent = hrp
+            p(attachments, middleAttachment)
+            
+            -- Создаем leftwing emitter
+            local leftWingEmitter = Instance.new("ParticleEmitter")
+            leftWingEmitter.Name = "leftwing"
+            leftWingEmitter.Acceleration = B(0.01, 0, -0.01)
+            leftWingEmitter.Brightness = 2
+            leftWingEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, wings_state.color),
+                ColorSequenceKeypoint.new(1, wings_state.color)
+            }
+            leftWingEmitter.Drag = 0
+            leftWingEmitter.EmissionDirection = Enum.NormalId.Left
+            leftWingEmitter.Enabled = true
+            leftWingEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            leftWingEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            leftWingEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            leftWingEmitter.FlipbookStartRandom = false
+            leftWingEmitter.Lifetime = NumberRange.new(5, 5)
+            leftWingEmitter.LightEmission = 0.5
+            leftWingEmitter.LightInfluence = 0
+            leftWingEmitter.LockedToPart = true
+            leftWingEmitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            leftWingEmitter.Rate = 1
+            leftWingEmitter.RotSpeed = NumberRange.new(0, 0)
+            leftWingEmitter.Rotation = NumberRange.new(0, 0)
+            leftWingEmitter.Shape = Enum.ParticleEmitterShape.Disc
+            leftWingEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward
+            leftWingEmitter.ShapePartial = 1
+            leftWingEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            leftWingEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 3)}
+            leftWingEmitter.Speed = NumberRange.new(0, 0)
+            leftWingEmitter.SpreadAngle = Vector2.new(0, 0)
+            leftWingEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            leftWingEmitter.Texture = "rbxassetid://13326678344"
+            leftWingEmitter.TimeScale = 1
+            leftWingEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            leftWingEmitter.VelocityInheritance = 0
+            leftWingEmitter.ZOffset = 0
+            leftWingEmitter.Parent = middleAttachment
+            p(emitters, leftWingEmitter)
+            
+            -- Создаем anotherwing attachment (правое крыло)
+            local anotherWingAttachment = Instance.new("Attachment")
+            anotherWingAttachment.Name = "anotherwing"
+            anotherWingAttachment.Axis = B(1, 0, 0)
+            anotherWingAttachment.CFrame = C(2, 0.5, 2.29999995, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            anotherWingAttachment.Orientation = B(0, 0, 0)
+            anotherWingAttachment.Position = B(2, 0.5, 2.29999995)
+            anotherWingAttachment.SecondaryAxis = B(0, 1, 0)
+            anotherWingAttachment.Visible = false
+            anotherWingAttachment.Parent = hrp
+            p(attachments, anotherWingAttachment)
+            
+            -- Создаем rightwing emitter
+            local rightWingEmitter = Instance.new("ParticleEmitter")
+            rightWingEmitter.Name = "rightwing"
+            rightWingEmitter.Acceleration = B(0.01, 0, -0.01)
+            rightWingEmitter.Brightness = 2
+            rightWingEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, wings_state.color),
+                ColorSequenceKeypoint.new(1, wings_state.color)
+            }
+            rightWingEmitter.Drag = 0
+            rightWingEmitter.EmissionDirection = Enum.NormalId.Left
+            rightWingEmitter.Enabled = true
+            rightWingEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            rightWingEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            rightWingEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            rightWingEmitter.FlipbookStartRandom = false
+            rightWingEmitter.Lifetime = NumberRange.new(5, 5)
+            rightWingEmitter.LightEmission = 0.5
+            rightWingEmitter.LightInfluence = 0
+            rightWingEmitter.LockedToPart = true
+            rightWingEmitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            rightWingEmitter.Rate = 1
+            rightWingEmitter.RotSpeed = NumberRange.new(0, 0)
+            rightWingEmitter.Rotation = NumberRange.new(0, 0)
+            rightWingEmitter.Shape = Enum.ParticleEmitterShape.Disc
+            rightWingEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward
+            rightWingEmitter.ShapePartial = 1
+            rightWingEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            rightWingEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 3)}
+            rightWingEmitter.Speed = NumberRange.new(0, 0)
+            rightWingEmitter.SpreadAngle = Vector2.new(0, 0)
+            rightWingEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            rightWingEmitter.Texture = "rbxassetid://13326678344"
+            rightWingEmitter.TimeScale = 1
+            rightWingEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            rightWingEmitter.VelocityInheritance = 0
+            rightWingEmitter.ZOffset = 0
+            rightWingEmitter.Parent = anotherWingAttachment
+            p(emitters, rightWingEmitter)
+            
+            -- Сохраняем ссылки
+            wings_state.attachments = attachments
+            wings_state.particle_emitters = emitters
+            
+            -- Подключаемся к событиям персонажа
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function wings_utility:setupCharacterEvents(localPlayer)
+            -- Подключаемся к событию смерти персонажа
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local diedConnection = humanoid.Died:Connect(function()
+                    -- Очищаем только визуальные элементы
+                    for _, attachment in pairs(wings_state.attachments) do
+                        if attachment then
+                            attachment:Destroy()
+                        end
+                    end
+                    for _, emitter in pairs(wings_state.particle_emitters) do
+                        if emitter then
+                            emitter:Destroy()
+                        end
+                    end
+                    wings_state.attachments = {}
+                    wings_state.particle_emitters = {}
+                end)
+                table.insert(wings_state.cleanup_connections, diedConnection)
+            end
+        end
+        
+        function wings_utility:setEnabled(enabled)
+            wings_state.enabled = enabled
+            
+            if enabled then
+                self:createWings()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function wings_utility:updateColor(newColor)
+            wings_state.color = newColor
+            
+            -- Обновляем цвет существующих крыльев
+            for _, emitter in pairs(wings_state.particle_emitters) do
+                if emitter then
+                    emitter.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, newColor),
+                        ColorSequenceKeypoint.new(1, newColor)
+                    }
+                end
+            end
+        end
+        
+        -- Wings Toggle
+        local wingsToggle = stuffSection:Toggle({
+            Name = "Wings",
+            Default = false,
+            Flag = "wings_enabled",
+            Callback = function(value)
+                wings_utility:setEnabled(value)
+            end
+        })
+        
+        -- Wings Colorpicker
+        wingsToggle:Colorpicker({
+            Name = "Wings Color",
+            Default = z(255, 0, 0), -- Красный цвет по умолчанию
+            Flag = "wings_color",
+            Callback = function(value)
+                wings_utility:updateColor(value)
+            end
+        })
+        
+        -- Глобальное подключение к событию CharacterAdded для крыльев (вне функций)
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if wings_state.enabled then
+                wings_utility:createWings()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if wings_state.enabled then
+                    wings_utility:createWings()
+                end
+            end)
+        end
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.WingsUtility = wings_utility
+        
+        -- Trail система
+        local trail_state = {
+            enabled = false,
+            color = z(255, 0, 0), -- Красный цвет по умолчанию
+            attachment = nil,
+            particle_emitter = nil,
+            cleanup_connections = {},
+            last_position = nil,
+            movement_connection = nil
+        }
+        
+        local trail_utility = {}
+        
+        function trail_utility:cleanup()
+            -- Удаляем attachment и particle emitter
+            if trail_state.attachment then
+                trail_state.attachment:Destroy()
+                trail_state.attachment = nil
+            end
+            
+            if trail_state.particle_emitter then
+                trail_state.particle_emitter:Destroy()
+                trail_state.particle_emitter = nil
+            end
+            
+            -- Отключаем соединения
+            for _, connection in pairs(trail_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            trail_state.cleanup_connections = {}
+            
+            if trail_state.movement_connection then
+                trail_state.movement_connection:Disconnect()
+                trail_state.movement_connection = nil
+            end
+            
+            trail_state.last_position = nil
+        end
+        
+        function trail_utility:setupCharacterEvents(player)
+            local character = player.Character
+            if not character then return end
+            
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                local connection = humanoid.Died:Connect(function()
+                    self:cleanup()
+                end)
+                p(trail_state.cleanup_connections, connection)
+            end
+        end
+        
+        function trail_utility:createTrail()
+            local localPlayer = g
+            if not localPlayer.Character then return end
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            
+            self:cleanup()
+            
+            -- Создаем RootAttachment
+            local rootAttachment = Instance.new("Attachment")
+            rootAttachment.Name = "RootAttachment"
+            rootAttachment.Axis = B(1, 0, 0)
+            rootAttachment.CFrame = C(0, 0, 0)
+            rootAttachment.Position = B(0, 0, 0)
+            rootAttachment.SecondaryAxis = B(0, 1, 0)
+            rootAttachment.Visible = false
+            rootAttachment.Parent = hrp
+            trail_state.attachment = rootAttachment
+            
+            -- Создаем Blood1 emitter
+            local bloodEmitter = Instance.new("ParticleEmitter")
+            bloodEmitter.Name = "Blood1"
+            bloodEmitter.Acceleration = B(0, -15, 0)
+            bloodEmitter.Brightness = 5
+            bloodEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, trail_state.color),
+                ColorSequenceKeypoint.new(1, trail_state.color)
+            }
+            bloodEmitter.Drag = 0
+            bloodEmitter.EmissionDirection = Enum.NormalId.Top
+            bloodEmitter.Enabled = false -- Изначально выключен
+            bloodEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            bloodEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            bloodEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            bloodEmitter.FlipbookStartRandom = false
+            bloodEmitter.Lifetime = NumberRange.new(2, 2)
+            bloodEmitter.LightEmission = 0.5
+            bloodEmitter.LightInfluence = 0
+            bloodEmitter.LockedToPart = false
+            bloodEmitter.Orientation = Enum.ParticleOrientation.VelocityParallel
+            bloodEmitter.Rate = 25
+            bloodEmitter.RotSpeed = NumberRange.new(0, 0)
+            bloodEmitter.Rotation = NumberRange.new(-90, -90)
+            bloodEmitter.Shape = Enum.ParticleEmitterShape.Box
+            bloodEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            bloodEmitter.ShapePartial = 1
+            bloodEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            bloodEmitter.Size = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 0.2),
+                NumberSequenceKeypoint.new(1, 0.2)
+            }
+            bloodEmitter.Speed = NumberRange.new(3, 3)
+            bloodEmitter.SpreadAngle = Vector2.new(-150, -150)
+            bloodEmitter.Squash = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 0)
+            }
+            bloodEmitter.Texture = "rbxassetid://12363979555"
+            bloodEmitter.TimeScale = 1
+            bloodEmitter.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 0)
+            }
+            bloodEmitter.VelocityInheritance = 0
+            bloodEmitter.ZOffset = 0
+            bloodEmitter.Parent = rootAttachment
+            trail_state.particle_emitter = bloodEmitter
+            
+            -- Инициализируем начальную позицию
+            trail_state.last_position = hrp.Position
+            
+            -- Создаем соединение для отслеживания движения
+            trail_state.movement_connection = b.Heartbeat:Connect(function()
+                if not hrp or not hrp.Parent then return end
+                if not trail_state.particle_emitter then return end
+                
+                local currentPosition = hrp.Position
+                if trail_state.last_position then
+                    local distance = (currentPosition - trail_state.last_position).Magnitude
+                    
+                    -- Если игрок движется (расстояние больше порога)
+                    -- Уменьшаем порог для более чувствительного определения движения
+                    if distance > 0.05 then
+                        trail_state.particle_emitter.Enabled = true
+                    else
+                        trail_state.particle_emitter.Enabled = false
+                    end
+                end
+                
+                trail_state.last_position = currentPosition
+            end)
+            
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function trail_utility:setEnabled(enabled)
+            trail_state.enabled = enabled
+            
+            if enabled then
+                self:createTrail()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function trail_utility:updateColor(color)
+            trail_state.color = color
+            
+            if trail_state.particle_emitter then
+                trail_state.particle_emitter.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, color),
+                    ColorSequenceKeypoint.new(1, color)
+                }
+            end
+        end
+        
+        -- Trail Toggle
+        local trailToggle = stuffSection:Toggle({
+            Name = "Trail",
+            Default = false,
+            Flag = "trail_enabled",
+            Callback = function(value)
+                trail_utility:setEnabled(value)
+            end
+        })
+        
+        -- Trail Colorpicker
+        trailToggle:Colorpicker({
+            Name = "Trail Color",
+            Default = z(255, 0, 0), -- Красный цвет по умолчанию
+            Flag = "trail_color",
+            Callback = function(value)
+                trail_utility:updateColor(value)
+            end
+        })
+        
+        -- Глобальное подключение к событию CharacterAdded для трейла
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if trail_state.enabled then
+                trail_utility:createTrail()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if trail_state.enabled then
+                    trail_utility:createTrail()
+                end
+            end)
+        end
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.TrailUtility = trail_utility
+        
+    end
+end -- End Visuals Tab
+
 do -- Watermark & Keybinds
     local Q = K:Watermark("Fentanyl | " .. g.Name .. " | " .. os.date("%y.%m.%d") .. " | Premium")
     local R = K:KeybindList()
@@ -1376,6 +5490,11 @@ do -- Settings Tab
                     L.GradientTitle.Start = ad
                     L.GradientTitle.Middle = ad
                     L.GradientTitle.End = ad
+                end
+                
+                -- Обновляем цвет ауры если она активна
+                if _G.AuraUtility then
+                    _G.AuraUtility:updateColor(ad)
                 end
             end
         }
