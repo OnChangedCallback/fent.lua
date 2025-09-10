@@ -1301,39 +1301,75 @@ function ESP_Library.cleanup()
         -- Clear Drawing objects
         if objects.Box and objects.Box.Full then
             if objects.Box.Full.Square then
-                objects.Box.Full.Square:Remove()
+                objects.Box.Full.Square.Visible = false
+                pcall(function() objects.Box.Full.Square:Remove() end)
             end
             if objects.Box.Full.Inline then
-                objects.Box.Full.Inline:Remove()
+                objects.Box.Full.Inline.Visible = false
+                pcall(function() objects.Box.Full.Inline:Remove() end)
             end
             if objects.Box.Full.Outline then
-                objects.Box.Full.Outline:Remove()
+                objects.Box.Full.Outline.Visible = false
+                pcall(function() objects.Box.Full.Outline:Remove() end)
             end
-            if objects.Box.Full.Filled and objects.Box.Full.Filled.Parent then
-                objects.Box.Full.Filled.Parent:Destroy()
+            if objects.Box.Full.Filled then
+                objects.Box.Full.Filled.Visible = false
+                if objects.Box.Full.Filled.Parent then
+                    pcall(function() objects.Box.Full.Filled.Parent:Destroy() end)
+                end
             end
         end
         
         -- Clear Text objects
         if objects.Text then
             for _, textObj in pairs(objects.Text) do
-                if textObj and textObj.Parent then
-                    textObj.Parent:Destroy()
+                if textObj then
+                    textObj.Visible = false
+                    if textObj.Parent then
+                        pcall(function() textObj.Parent:Destroy() end)
+                    end
                 end
             end
         end
         
         -- Clear Bar objects
         if objects.Bars then
-            if objects.Bars.Armor and objects.Bars.Armor.Gui then
-                objects.Bars.Armor.Gui:Destroy()
+            if objects.Bars.Armor then
+                if objects.Bars.Armor.Frame then
+                    objects.Bars.Armor.Frame.Visible = false
+                end
+                if objects.Bars.Armor.Outline then
+                    objects.Bars.Armor.Outline.Visible = false
+                end
+                if objects.Bars.Armor.Gui then
+                    objects.Bars.Armor.Gui.Enabled = false
+                    pcall(function() objects.Bars.Armor.Gui:Destroy() end)
+                end
             end
-            if objects.Bars.Health and objects.Bars.Health.Gui then
-                objects.Bars.Health.Gui:Destroy()
+            if objects.Bars.Health then
+                if objects.Bars.Health.Frame then
+                    objects.Bars.Health.Frame.Visible = false
+                end
+                if objects.Bars.Health.Outline then
+                    objects.Bars.Health.Outline.Visible = false
+                end
+                if objects.Bars.Health.Gui then
+                    objects.Bars.Health.Gui.Enabled = false
+                    pcall(function() objects.Bars.Health.Gui:Destroy() end)
+                end
             end
         end
     end
     
+    -- Clear all Drawing objects in CoreGui
+    pcall(function()
+        for _, obj in pairs(game:GetService("CoreGui"):GetDescendants()) do
+            if obj:IsA("ScreenGui") and (obj.Name:find("HealthBar") or obj.Name:find("ArmorBar")) then
+                obj.Enabled = false
+                obj:Destroy()
+            end
+        end
+    end)
     
     -- Clear the cache
     I = {}
@@ -1341,7 +1377,7 @@ function ESP_Library.cleanup()
     
     -- Call original cleanup if exists
     if getgenv and getgenv().ESP_CLEANUP then
-        if getgenv then getgenv().ESP_CLEANUP() end
+        pcall(function() getgenv().ESP_CLEANUP() end)
     end
 end
 
