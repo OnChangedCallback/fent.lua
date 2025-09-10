@@ -2649,9 +2649,15 @@ do -- Ragebot Tab
                 return
             end
             
-            if not player.Character:FindFirstChild("BodyEffects") or 
-               not player.Character.BodyEffects:FindFirstChild("Armor") then 
-                print("[AutoArmor] No BodyEffects or Armor")
+            local bodyEffects = player.Character:FindFirstChild("BodyEffects")
+            if not bodyEffects then 
+                print("[AutoArmor] No BodyEffects found")
+                return
+            end
+            
+            local armorValue = bodyEffects:FindFirstChild("Armor")
+            if not armorValue then 
+                print("[AutoArmor] No Armor value found in BodyEffects")
                 return
             end
             
@@ -2661,7 +2667,7 @@ do -- Ragebot Tab
                 return 
             end
             
-            local currentArmor = player.Character.BodyEffects.Armor.Value
+            local currentArmor = armorValue.Value
             print("[AutoArmor] Current armor:", currentArmor, "Threshold:", ARMOR_THRESHOLD)
             
             if currentArmor > ARMOR_THRESHOLD then 
@@ -2737,13 +2743,18 @@ do -- Ragebot Tab
                 
                 -- Проверяем броню после покупки
                 wait(0.2)
-                local newArmor = player.Character.BodyEffects.Armor.Value
+                local bodyEffectsAfter = player.Character:FindFirstChild("BodyEffects")
+                if bodyEffectsAfter and bodyEffectsAfter:FindFirstChild("Armor") then
+                    local newArmor = bodyEffectsAfter.Armor.Value
                 print("[AutoArmor] Armor after purchase:", newArmor)
                 
-                if newArmor >= 200 then
-                    K:Notification("[DEBUG] Armor bought: " .. newArmor, 3, z(0, 255, 0))
+                    if newArmor >= 200 then
+                        K:Notification("[DEBUG] Armor bought: " .. newArmor, 3, z(0, 255, 0))
+                    else
+                        K:Notification("[DEBUG] Armor purchase failed: " .. newArmor, 3, z(255, 0, 0))
+                    end
                 else
-                    K:Notification("[DEBUG] Armor purchase failed: " .. newArmor, 3, z(255, 0, 0))
+                    K:Notification("[DEBUG] Cannot check armor after purchase", 3, z(255, 255, 0))
                 end
             else
                 print("[AutoArmor] DesyncLibrary not found!")
@@ -3599,6 +3610,435 @@ do -- Visuals Tab
             Flag = "hit_sounds_pitch",
             Callback = function(value)
                 K.Flags["hit_sounds_pitch"] = value
+            end
+        })
+        
+    end
+    
+    do -- Local Section
+        local localSection = N:Section({Name = "Local", Side = 1})
+        
+        -- Local Highlight и SelfMaterial структура данных
+        local localHighlightData = {
+            hl = nil,
+            char_added_conn = nil,
+            char_removing_conn = nil,
+            died_conn = nil,
+            original_materials = {},  -- хранение оригинальных материалов
+            original_colors = {},      -- хранение оригинальных цветов
+            selfMaterialConnection = nil,
+            selfMaterialChildConn = nil,
+            appearanceConn = nil  -- добавляем поле для CharacterAppearanceLoaded
+        }
+        
+        -- R15 части тела для проверки
+        local R15Parts = {
+            ["Head"] = true,
+            ["UpperTorso"] = true, ["LowerTorso"] = true,
+            ["LeftUpperArm"] = true, ["LeftLowerArm"] = true, ["LeftHand"] = true,
+            ["RightUpperArm"] = true, ["RightLowerArm"] = true, ["RightHand"] = true,
+            ["LeftUpperLeg"] = true, ["LeftLowerLeg"] = true, ["LeftFoot"] = true,
+            ["RightUpperLeg"] = true, ["RightLowerLeg"] = true, ["RightFoot"] = true,
+            ["HumanoidRootPart"] = true
+        }
+        
+        -- Функция создания local highlight
+        local function createLocalHighlight()
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "LOCAL_HL_32v"
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            return highlight
+        end
+        
+        -- Функция применения ForceField материала (логика из anotherscript)
+        local function ApplyForceFieldBody(character)
+            if not character then return end
+            
+            local selfColor = K.Flags["self_material_color"] or z(255, 255, 255)
+            local selfTransparency = K.Flags["self_material_transparency"] or 0
+            
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") and R15Parts[part.Name] then
+                    -- Сохраняем оригинальный цвет перед изменением
+                    if not localHighlightData.original_colors[part.Name] then
+                        localHighlightData.original_colors[part.Name] = part.Color
+                    end
+                    if not localHighlightData.original_materials[part.Name] then
+                        localHighlightData.original_materials[part.Name] = part.Material
+                    end
+                    
+                    -- Применяем ForceField материал и цвет всегда
+                    part.Material = Enum.Material.ForceField
+                    part.Color = selfColor
+                    -- Не меняем прозрачность HumanoidRootPart
+                    if part.Name ~= "HumanoidRootPart" then
+                        part.Transparency = selfTransparency
+                    end
+                end
+            end
+        end
+        
+        -- Функция скрытия одежды
+        local function HideClothes(character)
+            if not character then return end
+            local folder = character:FindFirstChild("SimpleBotHiddenClothes")
+            if not folder then
+                folder = Instance.new("Folder")
+                folder.Name = "SimpleBotHiddenClothes"
+                folder.Parent = character
+            end
+            
+            for _, obj in pairs(character:GetChildren()) do
+                if obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") then
+                    obj.Parent = folder
+                end
+            end
+        end
+        
+        -- Функция восстановления одежды
+        local function RestoreClothes(character)
+            if not character then return end
+            local folder = character:FindFirstChild("SimpleBotHiddenClothes")
+            if folder then
+                for _, obj in pairs(folder:GetChildren()) do
+                    obj.Parent = character
+                end
+                folder:Destroy()
+            end
+        end
+        
+        -- Функция включения Self Material
+        local function EnableSelfMaterial()
+            if not K.Flags["self_material"] then return end
+            if not g.Character then return end
+            
+            -- Очищаем сохраненные цвета при новом включении
+            localHighlightData.original_colors = {}
+            localHighlightData.original_materials = {}
+            
+            ApplyForceFieldBody(g.Character)
+            HideClothes(g.Character)
+            
+            -- ChildAdded для новых частей
+            if not localHighlightData.selfMaterialChildConn then
+                localHighlightData.selfMaterialChildConn = g.Character.ChildAdded:Connect(function(obj)
+                    if obj:IsA("BasePart") and R15Parts[obj.Name] then
+                        if K.Flags["self_material"] then
+                            -- Сохраняем оригинальный цвет новой части
+                            if not localHighlightData.original_colors[obj.Name] then
+                                localHighlightData.original_colors[obj.Name] = obj.Color
+                            end
+                            if not localHighlightData.original_materials[obj.Name] then
+                                localHighlightData.original_materials[obj.Name] = obj.Material
+                            end
+                            
+                            obj.Material = Enum.Material.ForceField
+                            obj.Color = K.Flags["self_material_color"] or z(255, 255, 255)
+                            if obj.Name ~= "HumanoidRootPart" then
+                                obj.Transparency = K.Flags["self_material_transparency"] or 0
+                            end
+                        end
+                    end
+                end)
+            end
+            
+            -- Обработчик респавна
+            if not localHighlightData.selfMaterialConnection then
+                localHighlightData.selfMaterialConnection = g.CharacterAdded:Connect(function(character)
+                    -- Очищаем сохраненные данные при респавне
+                    localHighlightData.original_colors = {}
+                    localHighlightData.original_materials = {}
+                    
+                    -- Функция применения Self Material с задержками
+                    local function applyWithDelay()
+                        if K.Flags["self_material"] and character and g and g.Character == character then
+                            ApplyForceFieldBody(character)
+                            HideClothes(character)
+                        end
+                    end
+                    
+                    -- Применяем несколько раз с задержками для гарантии
+                    task.delay(0.5, applyWithDelay)
+                    task.delay(1.0, applyWithDelay)
+                    task.delay(1.5, applyWithDelay)
+                    
+                    -- Обработчик CharacterAppearanceLoaded для применения после загрузки внешности
+                    if localHighlightData.appearanceConn then
+                        localHighlightData.appearanceConn:Disconnect()
+                        localHighlightData.appearanceConn = nil
+                    end
+                    
+                    localHighlightData.appearanceConn = g.CharacterAppearanceLoaded:Connect(function(loadedChar)
+                        if loadedChar ~= character then return end
+                        task.delay(0.2, applyWithDelay)
+                    end)
+                    
+                    -- Переподключаем ChildAdded
+                    if localHighlightData.selfMaterialChildConn then 
+                        localHighlightData.selfMaterialChildConn:Disconnect() 
+                    end
+                    localHighlightData.selfMaterialChildConn = character.ChildAdded:Connect(function(obj)
+                        if obj:IsA("BasePart") and R15Parts[obj.Name] then
+                            if K.Flags["self_material"] then
+                                -- Сохраняем оригинальный цвет новой части
+                                if not localHighlightData.original_colors[obj.Name] then
+                                    localHighlightData.original_colors[obj.Name] = obj.Color
+                                end
+                                if not localHighlightData.original_materials[obj.Name] then
+                                    localHighlightData.original_materials[obj.Name] = obj.Material
+                                end
+                                
+                                obj.Material = Enum.Material.ForceField
+                                obj.Color = K.Flags["self_material_color"] or z(255, 255, 255)
+                                if obj.Name ~= "HumanoidRootPart" then
+                                    obj.Transparency = K.Flags["self_material_transparency"] or 0
+                                end
+                            end
+                        end
+                    end)
+                end)
+            end
+        end
+        
+        -- Функция отключения Self Material
+        local function DisableSelfMaterial()
+            if localHighlightData.selfMaterialConnection then 
+                localHighlightData.selfMaterialConnection:Disconnect() 
+                localHighlightData.selfMaterialConnection = nil 
+            end
+            if localHighlightData.selfMaterialChildConn then 
+                localHighlightData.selfMaterialChildConn:Disconnect() 
+                localHighlightData.selfMaterialChildConn = nil 
+            end
+            if localHighlightData.appearanceConn then
+                localHighlightData.appearanceConn:Disconnect()
+                localHighlightData.appearanceConn = nil
+            end
+            
+            if g.Character then
+                RestoreClothes(g.Character)
+                for _, part in pairs(g.Character:GetChildren()) do
+                    if part:IsA("BasePart") and R15Parts[part.Name] then
+                        part.Material = Enum.Material.Plastic
+                        -- Восстанавливаем оригинальный цвет или используем стандартный
+                        if localHighlightData.original_colors[part.Name] then
+                            part.Color = localHighlightData.original_colors[part.Name]
+                        else
+                            -- Стандартные цвета для частей тела Roblox
+                            if part.Name:find("Hand") or part.Name:find("Foot") or part.Name == "Head" then
+                                part.Color = z(255, 204, 153)  -- Цвет кожи
+                            else
+                                part.Color = z(255, 204, 153)  -- Цвет кожи для всех частей
+                            end
+                        end
+                        -- Восстанавливаем прозрачность
+                        if part.Name ~= "HumanoidRootPart" then
+                            part.Transparency = 0
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Функция очистки local highlight
+        local function cleanupLocalHighlight()
+            if localHighlightData.hl then
+                localHighlightData.hl:Destroy()
+                localHighlightData.hl = nil
+            end
+        end
+        
+        -- Функция применения local highlight
+        local function applyLocalHighlight(character)
+            if not character or not K.Flags or not K.Flags["local_highlight"] then
+                cleanupLocalHighlight()
+                return
+            end
+            
+            -- Создаем highlight объект если его нет
+            if not localHighlightData.hl then
+                localHighlightData.hl = createLocalHighlight()
+            end
+            
+            local highlight = localHighlightData.hl
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            
+            -- Получаем цвета и transparency из флагов
+            local fillColor = K.Flags["local_highlight_fill"]
+            local fillAlpha = K.Flags["local_highlight_fill_alpha"]
+            local outlineColor = K.Flags["local_highlight_outline"]
+            local outlineAlpha = K.Flags["local_highlight_outline_alpha"]
+            
+            -- Применяем Fill Color и Transparency
+            highlight.FillColor = fillColor or z(255, 255, 0)
+            highlight.FillTransparency = fillAlpha or 0.5
+            
+            -- Применяем Outline Color и Transparency
+            highlight.OutlineColor = outlineColor or z(0, 0, 0)
+            highlight.OutlineTransparency = outlineAlpha or 0.5
+            
+            highlight.Adornee = character
+            highlight.Parent = character
+            highlight.Enabled = true
+        end
+        
+        -- Функция настройки Died connection для локального игрока
+        local function setupLocalDiedConnection(character)
+            if not character then return end
+            
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                if localHighlightData.died_conn then
+                    localHighlightData.died_conn:Disconnect()
+                end
+                
+                localHighlightData.died_conn = humanoid.Died:Connect(function()
+                    cleanupLocalHighlight()
+                end)
+            end
+        end
+        
+        -- Функция привязки к локальному игроку
+        local function bindToLocalPlayer()
+            local localPlayer = g -- локальный игрок
+            if not localPlayer then return end
+            
+            -- Отключаем старые соединения
+            if localHighlightData.char_added_conn then
+                localHighlightData.char_added_conn:Disconnect()
+            end
+            if localHighlightData.char_removing_conn then
+                localHighlightData.char_removing_conn:Disconnect()
+            end
+            
+            -- При удалении персонажа - очищаем highlight и очищаем сохраненные данные
+            localHighlightData.char_removing_conn = localPlayer.CharacterRemoving:Connect(function(character)
+                cleanupLocalHighlight()
+                -- Очищаем сохраненные данные при удалении персонажа
+                localHighlightData.original_materials = {}
+                localHighlightData.original_colors = {}
+            end)
+            
+            -- При добавлении персонажа - применяем все эффекты
+            localHighlightData.char_added_conn = localPlayer.CharacterAdded:Connect(function(character)
+                -- Ждем немного чтобы персонаж полностью загрузился
+                task.wait(0.1)
+                
+                -- Применяем highlight если включен
+                if K.Flags and K.Flags["local_highlight"] then
+                    applyLocalHighlight(character)
+                    setupLocalDiedConnection(character)
+                end
+            end)
+            
+            -- Если персонаж уже существует - применяем все эффекты сразу
+            if localPlayer.Character then
+                if K.Flags and K.Flags["local_highlight"] then
+                    applyLocalHighlight(localPlayer.Character)
+                    setupLocalDiedConnection(localPlayer.Character)
+                end
+            end
+        end
+        
+        -- Local Highlight Toggle
+        local _localHighlightToggle = localSection:Toggle({
+            Name = "Highlight",
+            Default = false,
+            Flag = "local_highlight",
+            Callback = function(value)
+                if value then
+                    bindToLocalPlayer()
+                    -- Если персонаж уже есть - применяем highlight
+                    if g and g.Character then
+                        applyLocalHighlight(g.Character)
+                        setupLocalDiedConnection(g.Character)
+                    end
+                else
+                    cleanupLocalHighlight()
+                    -- Отключаем соединения
+                    if localHighlightData.char_added_conn then
+                        localHighlightData.char_added_conn:Disconnect()
+                        localHighlightData.char_added_conn = nil
+                    end
+                    if localHighlightData.char_removing_conn then
+                        localHighlightData.char_removing_conn:Disconnect()
+                        localHighlightData.char_removing_conn = nil
+                    end
+                    if localHighlightData.died_conn then
+                        localHighlightData.died_conn:Disconnect()
+                        localHighlightData.died_conn = nil
+                    end
+                end
+            end
+        })
+        
+        -- Self Material Toggle
+        local _selfMaterialToggle = localSection:Toggle({
+            Name = "Self Material",
+            Default = false,
+            Flag = "self_material",
+            Callback = function(value)
+                if value then
+                    EnableSelfMaterial()
+                else
+                    DisableSelfMaterial()
+                end
+            end
+        })
+        
+        -- Self Material Color Picker с прозрачностью
+        _selfMaterialToggle:Colorpicker({
+            Name = "Color",
+            Default = z(255, 255, 255),
+            Alpha = 0,
+            Flag = "self_material_color",
+            Callback = function(color, alpha)
+                K.Flags["self_material_color"] = color
+                K.Flags["self_material_transparency"] = alpha or 0
+                -- Обновляем цвет и прозрачность если Self Material активен
+                if K.Flags["self_material"] and g and g.Character then
+                    -- Применяем новые цвет и прозрачность ко всем частям тела
+                    for _, part in pairs(g.Character:GetChildren()) do
+                        if part:IsA("BasePart") and R15Parts[part.Name] and part.Material == Enum.Material.ForceField then
+                            part.Color = color
+                            if part.Name ~= "HumanoidRootPart" then
+                                part.Transparency = alpha or 0
+                            end
+                        end
+                    end
+                end
+            end
+        })
+        
+        -- Local Highlight Fill Color Picker
+        _localHighlightToggle:Colorpicker({
+            Name = "Fill Color",
+            Default = z(255, 255, 0),
+            Alpha = 0.5,
+            Flag = "local_highlight_fill",
+            Callback = function(color, alpha)
+                K.Flags["local_highlight_fill"] = color
+                K.Flags["local_highlight_fill_alpha"] = alpha
+                -- Обновляем highlight если он активен
+                if K.Flags["local_highlight"] and g and g.Character then
+                    applyLocalHighlight(g.Character)
+                end
+            end
+        })
+        
+        -- Local Highlight Outline Color Picker
+        _localHighlightToggle:Colorpicker({
+            Name = "Outline Color",
+            Default = z(0, 0, 0),
+            Alpha = 0.5,
+            Flag = "local_highlight_outline",
+            Callback = function(color, alpha)
+                K.Flags["local_highlight_outline"] = color
+                K.Flags["local_highlight_outline_alpha"] = alpha
+                -- Обновляем highlight если он активен
+                if K.Flags["local_highlight"] and g and g.Character then
+                    applyLocalHighlight(g.Character)
+                end
             end
         })
         
@@ -4808,7 +5248,1370 @@ do -- Visuals Tab
         -- Сохраняем в глобальную область для доступа из других частей кода
         _G.SnowUtility = snow_utility
         
+        -- Wings система
+        local wings_state = {
+            enabled = false,
+            color = z(255, 0, 0), -- Красный цвет по умолчанию
+            attachments = {},
+            particle_emitters = {},
+            cleanup_connections = {}
+        }
+        
+        local wings_utility = {}
+        
+        function wings_utility:cleanup()
+            -- Удаляем все attachments и particle emitters
+            for _, attachment in pairs(wings_state.attachments) do
+                if attachment then
+                    attachment:Destroy()
+                end
+            end
+            wings_state.attachments = {}
+            
+            for _, emitter in pairs(wings_state.particle_emitters) do
+                if emitter then
+                    emitter:Destroy()
+                end
+            end
+            wings_state.particle_emitters = {}
+            
+            -- Отключаем все подключения
+            for _, connection in pairs(wings_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            wings_state.cleanup_connections = {}
+        end
+        
+        function wings_utility:createWings()
+            local localPlayer = g
+            if not localPlayer.Character then
+                return
+            end
+            
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                return
+            end
+            
+            -- Очищаем предыдущие крылья
+            self:cleanup()
+            
+            local attachments = {}
+            local emitters = {}
+            
+            -- Создаем RootAttachment с ashes emitter
+            local rootAttachment = Instance.new("Attachment")
+            rootAttachment.Name = "WingsRootAttachment"
+            rootAttachment.Axis = B(1, 0, 0)
+            rootAttachment.CFrame = C(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            rootAttachment.Orientation = B(0, 0, 0)
+            rootAttachment.Position = B(0, 0, 0)
+            rootAttachment.SecondaryAxis = B(0, 1, 0)
+            rootAttachment.Visible = false
+            rootAttachment.Parent = hrp
+            p(attachments, rootAttachment)
+            
+            -- Создаем ashes emitter на RootAttachment
+            local ashesEmitter = Instance.new("ParticleEmitter")
+            ashesEmitter.Name = "ashes"
+            ashesEmitter.Acceleration = B(0, 0, 4)
+            ashesEmitter.Brightness = 2
+            ashesEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, wings_state.color),
+                ColorSequenceKeypoint.new(1, wings_state.color)
+            }
+            ashesEmitter.Drag = 0
+            ashesEmitter.EmissionDirection = Enum.NormalId.Top
+            ashesEmitter.Enabled = true
+            ashesEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            ashesEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            ashesEmitter.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+            ashesEmitter.FlipbookStartRandom = false
+            ashesEmitter.Lifetime = NumberRange.new(2, 3)
+            ashesEmitter.LightEmission = 0.5
+            ashesEmitter.LightInfluence = 1
+            ashesEmitter.LockedToPart = false
+            ashesEmitter.Orientation = Enum.ParticleOrientation.FacingCamera
+            ashesEmitter.Rate = 10
+            ashesEmitter.RotSpeed = NumberRange.new(-100, 100)
+            ashesEmitter.Rotation = NumberRange.new(-180, 180)
+            ashesEmitter.Shape = Enum.ParticleEmitterShape.Box
+            ashesEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            ashesEmitter.ShapePartial = 1
+            ashesEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            ashesEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0.1)}
+            ashesEmitter.Speed = NumberRange.new(3, 3)
+            ashesEmitter.SpreadAngle = Vector2.new(70, 70)
+            ashesEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            ashesEmitter.Texture = "http://www.roblox.com/asset/?id=12222002958"
+            ashesEmitter.TimeScale = 1
+            ashesEmitter.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(0.498132, 0),
+                NumberSequenceKeypoint.new(1, 1)
+            }
+            ashesEmitter.VelocityInheritance = 0
+            ashesEmitter.ZOffset = 0
+            ashesEmitter.Parent = rootAttachment
+            p(emitters, ashesEmitter)
+            
+            -- Создаем middle attachment (левое крыло)
+            local middleAttachment = Instance.new("Attachment")
+            middleAttachment.Name = "middle"
+            middleAttachment.Axis = B(-4.371138828673793e-08, 0, 1)
+            middleAttachment.CFrame = C(-2.20000005, 0.5, 2.29999995, -4.37113883e-08, 0, -1, 0, 1, 0, 1, 0, -4.37113883e-08)
+            middleAttachment.Orientation = B(0, -90, 0)
+            middleAttachment.Position = B(-2.20000005, 0.5, 2.29999995)
+            middleAttachment.SecondaryAxis = B(0, 1, 0)
+            middleAttachment.Visible = false
+            middleAttachment.Parent = hrp
+            p(attachments, middleAttachment)
+            
+            -- Создаем leftwing emitter
+            local leftWingEmitter = Instance.new("ParticleEmitter")
+            leftWingEmitter.Name = "leftwing"
+            leftWingEmitter.Acceleration = B(0.01, 0, -0.01)
+            leftWingEmitter.Brightness = 2
+            leftWingEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, wings_state.color),
+                ColorSequenceKeypoint.new(1, wings_state.color)
+            }
+            leftWingEmitter.Drag = 0
+            leftWingEmitter.EmissionDirection = Enum.NormalId.Left
+            leftWingEmitter.Enabled = true
+            leftWingEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            leftWingEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            leftWingEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            leftWingEmitter.FlipbookStartRandom = false
+            leftWingEmitter.Lifetime = NumberRange.new(5, 5)
+            leftWingEmitter.LightEmission = 0.5
+            leftWingEmitter.LightInfluence = 0
+            leftWingEmitter.LockedToPart = true
+            leftWingEmitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            leftWingEmitter.Rate = 1
+            leftWingEmitter.RotSpeed = NumberRange.new(0, 0)
+            leftWingEmitter.Rotation = NumberRange.new(0, 0)
+            leftWingEmitter.Shape = Enum.ParticleEmitterShape.Disc
+            leftWingEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward
+            leftWingEmitter.ShapePartial = 1
+            leftWingEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            leftWingEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 3)}
+            leftWingEmitter.Speed = NumberRange.new(0, 0)
+            leftWingEmitter.SpreadAngle = Vector2.new(0, 0)
+            leftWingEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            leftWingEmitter.Texture = "rbxassetid://13326678344"
+            leftWingEmitter.TimeScale = 1
+            leftWingEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            leftWingEmitter.VelocityInheritance = 0
+            leftWingEmitter.ZOffset = 0
+            leftWingEmitter.Parent = middleAttachment
+            p(emitters, leftWingEmitter)
+            
+            -- Создаем anotherwing attachment (правое крыло)
+            local anotherWingAttachment = Instance.new("Attachment")
+            anotherWingAttachment.Name = "anotherwing"
+            anotherWingAttachment.Axis = B(1, 0, 0)
+            anotherWingAttachment.CFrame = C(2, 0.5, 2.29999995, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+            anotherWingAttachment.Orientation = B(0, 0, 0)
+            anotherWingAttachment.Position = B(2, 0.5, 2.29999995)
+            anotherWingAttachment.SecondaryAxis = B(0, 1, 0)
+            anotherWingAttachment.Visible = false
+            anotherWingAttachment.Parent = hrp
+            p(attachments, anotherWingAttachment)
+            
+            -- Создаем rightwing emitter
+            local rightWingEmitter = Instance.new("ParticleEmitter")
+            rightWingEmitter.Name = "rightwing"
+            rightWingEmitter.Acceleration = B(0.01, 0, -0.01)
+            rightWingEmitter.Brightness = 2
+            rightWingEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, wings_state.color),
+                ColorSequenceKeypoint.new(1, wings_state.color)
+            }
+            rightWingEmitter.Drag = 0
+            rightWingEmitter.EmissionDirection = Enum.NormalId.Left
+            rightWingEmitter.Enabled = true
+            rightWingEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            rightWingEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            rightWingEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            rightWingEmitter.FlipbookStartRandom = false
+            rightWingEmitter.Lifetime = NumberRange.new(5, 5)
+            rightWingEmitter.LightEmission = 0.5
+            rightWingEmitter.LightInfluence = 0
+            rightWingEmitter.LockedToPart = true
+            rightWingEmitter.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+            rightWingEmitter.Rate = 1
+            rightWingEmitter.RotSpeed = NumberRange.new(0, 0)
+            rightWingEmitter.Rotation = NumberRange.new(0, 0)
+            rightWingEmitter.Shape = Enum.ParticleEmitterShape.Disc
+            rightWingEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward
+            rightWingEmitter.ShapePartial = 1
+            rightWingEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            rightWingEmitter.Size = NumberSequence.new{NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 3)}
+            rightWingEmitter.Speed = NumberRange.new(0, 0)
+            rightWingEmitter.SpreadAngle = Vector2.new(0, 0)
+            rightWingEmitter.Squash = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            rightWingEmitter.Texture = "rbxassetid://13326678344"
+            rightWingEmitter.TimeScale = 1
+            rightWingEmitter.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0)}
+            rightWingEmitter.VelocityInheritance = 0
+            rightWingEmitter.ZOffset = 0
+            rightWingEmitter.Parent = anotherWingAttachment
+            p(emitters, rightWingEmitter)
+            
+            -- Сохраняем ссылки
+            wings_state.attachments = attachments
+            wings_state.particle_emitters = emitters
+            
+            -- Подключаемся к событиям персонажа
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function wings_utility:setupCharacterEvents(localPlayer)
+            -- Подключаемся к событию смерти персонажа
+            local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local diedConnection = humanoid.Died:Connect(function()
+                    -- Очищаем только визуальные элементы
+                    for _, attachment in pairs(wings_state.attachments) do
+                        if attachment then
+                            attachment:Destroy()
+                        end
+                    end
+                    for _, emitter in pairs(wings_state.particle_emitters) do
+                        if emitter then
+                            emitter:Destroy()
+                        end
+                    end
+                    wings_state.attachments = {}
+                    wings_state.particle_emitters = {}
+                end)
+                table.insert(wings_state.cleanup_connections, diedConnection)
+            end
+        end
+        
+        function wings_utility:setEnabled(enabled)
+            wings_state.enabled = enabled
+            
+            if enabled then
+                self:createWings()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function wings_utility:updateColor(newColor)
+            wings_state.color = newColor
+            
+            -- Обновляем цвет существующих крыльев
+            for _, emitter in pairs(wings_state.particle_emitters) do
+                if emitter then
+                    emitter.Color = ColorSequence.new{
+                        ColorSequenceKeypoint.new(0, newColor),
+                        ColorSequenceKeypoint.new(1, newColor)
+                    }
+                end
+            end
+        end
+        
+        -- Wings Toggle
+        local wingsToggle = stuffSection:Toggle({
+            Name = "Wings",
+            Default = false,
+            Flag = "wings_enabled",
+            Callback = function(value)
+                wings_utility:setEnabled(value)
+            end
+        })
+        
+        -- Wings Colorpicker
+        wingsToggle:Colorpicker({
+            Name = "Wings Color",
+            Default = z(255, 0, 0), -- Красный цвет по умолчанию
+            Flag = "wings_color",
+            Callback = function(value)
+                wings_utility:updateColor(value)
+            end
+        })
+        
+        -- Глобальное подключение к событию CharacterAdded для крыльев (вне функций)
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if wings_state.enabled then
+                wings_utility:createWings()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if wings_state.enabled then
+                    wings_utility:createWings()
+                end
+            end)
+        end
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.WingsUtility = wings_utility
+        
+        -- Trail система
+        local trail_state = {
+            enabled = false,
+            color = z(255, 0, 0), -- Красный цвет по умолчанию
+            attachment = nil,
+            particle_emitter = nil,
+            cleanup_connections = {},
+            last_position = nil,
+            movement_connection = nil
+        }
+        
+        local trail_utility = {}
+        
+        function trail_utility:cleanup()
+            -- Удаляем attachment и particle emitter
+            if trail_state.attachment then
+                trail_state.attachment:Destroy()
+                trail_state.attachment = nil
+            end
+            
+            if trail_state.particle_emitter then
+                trail_state.particle_emitter:Destroy()
+                trail_state.particle_emitter = nil
+            end
+            
+            -- Отключаем соединения
+            for _, connection in pairs(trail_state.cleanup_connections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            trail_state.cleanup_connections = {}
+            
+            if trail_state.movement_connection then
+                trail_state.movement_connection:Disconnect()
+                trail_state.movement_connection = nil
+            end
+            
+            trail_state.last_position = nil
+        end
+        
+        function trail_utility:setupCharacterEvents(player)
+            local character = player.Character
+            if not character then return end
+            
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                local connection = humanoid.Died:Connect(function()
+                    self:cleanup()
+                end)
+                p(trail_state.cleanup_connections, connection)
+            end
+        end
+        
+        function trail_utility:createTrail()
+            local localPlayer = g
+            if not localPlayer.Character then return end
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            
+            self:cleanup()
+            
+            -- Создаем RootAttachment
+            local rootAttachment = Instance.new("Attachment")
+            rootAttachment.Name = "RootAttachment"
+            rootAttachment.Axis = B(1, 0, 0)
+            rootAttachment.CFrame = C(0, 0, 0)
+            rootAttachment.Position = B(0, 0, 0)
+            rootAttachment.SecondaryAxis = B(0, 1, 0)
+            rootAttachment.Visible = false
+            rootAttachment.Parent = hrp
+            trail_state.attachment = rootAttachment
+            
+            -- Создаем Blood1 emitter
+            local bloodEmitter = Instance.new("ParticleEmitter")
+            bloodEmitter.Name = "Blood1"
+            bloodEmitter.Acceleration = B(0, -15, 0)
+            bloodEmitter.Brightness = 5
+            bloodEmitter.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, trail_state.color),
+                ColorSequenceKeypoint.new(1, trail_state.color)
+            }
+            bloodEmitter.Drag = 0
+            bloodEmitter.EmissionDirection = Enum.NormalId.Top
+            bloodEmitter.Enabled = false -- Изначально выключен
+            bloodEmitter.FlipbookFramerate = NumberRange.new(1, 1)
+            bloodEmitter.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+            bloodEmitter.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+            bloodEmitter.FlipbookStartRandom = false
+            bloodEmitter.Lifetime = NumberRange.new(2, 2)
+            bloodEmitter.LightEmission = 0.5
+            bloodEmitter.LightInfluence = 0
+            bloodEmitter.LockedToPart = false
+            bloodEmitter.Orientation = Enum.ParticleOrientation.VelocityParallel
+            bloodEmitter.Rate = 25
+            bloodEmitter.RotSpeed = NumberRange.new(0, 0)
+            bloodEmitter.Rotation = NumberRange.new(-90, -90)
+            bloodEmitter.Shape = Enum.ParticleEmitterShape.Box
+            bloodEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+            bloodEmitter.ShapePartial = 1
+            bloodEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            bloodEmitter.Size = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 0.2),
+                NumberSequenceKeypoint.new(1, 0.2)
+            }
+            bloodEmitter.Speed = NumberRange.new(3, 3)
+            bloodEmitter.SpreadAngle = Vector2.new(-150, -150)
+            bloodEmitter.Squash = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 0)
+            }
+            bloodEmitter.Texture = "rbxassetid://12363979555"
+            bloodEmitter.TimeScale = 1
+            bloodEmitter.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 0)
+            }
+            bloodEmitter.VelocityInheritance = 0
+            bloodEmitter.ZOffset = 0
+            bloodEmitter.Parent = rootAttachment
+            trail_state.particle_emitter = bloodEmitter
+            
+            -- Инициализируем начальную позицию
+            trail_state.last_position = hrp.Position
+            
+            -- Создаем соединение для отслеживания движения
+            trail_state.movement_connection = b.Heartbeat:Connect(function()
+                if not hrp or not hrp.Parent then return end
+                if not trail_state.particle_emitter then return end
+                
+                local currentPosition = hrp.Position
+                if trail_state.last_position then
+                    local distance = (currentPosition - trail_state.last_position).Magnitude
+                    
+                    -- Если игрок движется (расстояние больше порога)
+                    -- Уменьшаем порог для более чувствительного определения движения
+                    if distance > 0.05 then
+                        trail_state.particle_emitter.Enabled = true
+                    else
+                        trail_state.particle_emitter.Enabled = false
+                    end
+                end
+                
+                trail_state.last_position = currentPosition
+            end)
+            
+            self:setupCharacterEvents(localPlayer)
+        end
+        
+        function trail_utility:setEnabled(enabled)
+            trail_state.enabled = enabled
+            
+            if enabled then
+                self:createTrail()
+            else
+                self:cleanup()
+            end
+        end
+        
+        function trail_utility:updateColor(color)
+            trail_state.color = color
+            
+            if trail_state.particle_emitter then
+                trail_state.particle_emitter.Color = ColorSequence.new{
+                    ColorSequenceKeypoint.new(0, color),
+                    ColorSequenceKeypoint.new(1, color)
+                }
+            end
+        end
+        
+        -- Trail Toggle
+        local trailToggle = stuffSection:Toggle({
+            Name = "Trail",
+            Default = false,
+            Flag = "trail_enabled",
+            Callback = function(value)
+                trail_utility:setEnabled(value)
+            end
+        })
+        
+        -- Trail Colorpicker
+        trailToggle:Colorpicker({
+            Name = "Trail Color",
+            Default = z(255, 0, 0), -- Красный цвет по умолчанию
+            Flag = "trail_color",
+            Callback = function(value)
+                trail_utility:updateColor(value)
+            end
+        })
+        
+        -- Глобальное подключение к событию CharacterAdded для трейла
+        g.CharacterAdded:Connect(function(newchar)
+            wait(0.5) -- Ждем полной загрузки персонажа
+            if trail_state.enabled then
+                trail_utility:createTrail()
+            end
+        end)
+        
+        -- Если персонаж уже существует при загрузке скрипта
+        if g.Character then
+            spawn(function()
+                wait(0.5)
+                if trail_state.enabled then
+                    trail_utility:createTrail()
+                end
+            end)
+        end
+        
+        -- Сохраняем в глобальную область для доступа из других частей кода
+        _G.TrailUtility = trail_utility
+        
     end
+    
+    do -- World Section
+        local worldSection = N:Section({Name = "World", Side = 2})
+        
+        -- Ambient utility
+        local ambient_utility = {}
+        local ambient_state = {
+            enabled = false,
+            custom_color = z(255, 255, 255),
+            default_ambient = nil,
+            default_outdoor_ambient = nil,
+            lighting = nil
+        }
+        
+        -- Функция инициализации
+        function ambient_utility:init()
+            ambient_state.lighting = game:GetService("Lighting")
+            
+            -- Сохраняем дефолтные значения при первом запуске
+            if not ambient_state.default_ambient then
+                ambient_state.default_ambient = ambient_state.lighting.Ambient
+            end
+            if not ambient_state.default_outdoor_ambient then
+                ambient_state.default_outdoor_ambient = ambient_state.lighting.OutdoorAmbient
+            end
+        end
+        
+        -- Функция применения кастомного ambient
+        function ambient_utility:applyCustomAmbient()
+            if not ambient_state.lighting then
+                self:init()
+            end
+            
+            if ambient_state.enabled then
+                -- Применяем кастомный цвет
+                ambient_state.lighting.Ambient = ambient_state.custom_color
+                ambient_state.lighting.OutdoorAmbient = ambient_state.custom_color
+            else
+                -- Восстанавливаем дефолтные значения
+                self:restoreDefaults()
+            end
+        end
+        
+        -- Функция восстановления дефолтных значений
+        function ambient_utility:restoreDefaults()
+            if ambient_state.lighting and ambient_state.default_ambient and ambient_state.default_outdoor_ambient then
+                ambient_state.lighting.Ambient = ambient_state.default_ambient
+                ambient_state.lighting.OutdoorAmbient = ambient_state.default_outdoor_ambient
+            end
+        end
+        
+        -- Функция обновления цвета
+        function ambient_utility:updateColor(color)
+            ambient_state.custom_color = color
+            if ambient_state.enabled then
+                self:applyCustomAmbient()
+            end
+        end
+        
+        -- Функция включения/выключения
+        function ambient_utility:setEnabled(enabled)
+            ambient_state.enabled = enabled
+            self:applyCustomAmbient()
+        end
+        
+        -- Инициализируем утилиту
+        ambient_utility:init()
+        
+        -- Создаем UI элементы
+        local _ambientToggle = worldSection:Toggle({
+            Name = "Ambient",
+            Default = false,
+            Flag = "world_ambient",
+            Callback = function(value)
+                ambient_utility:setEnabled(value)
+            end
+        })
+        
+        -- Колорпикер для Ambient
+        _ambientToggle:Colorpicker({
+            Name = "Ambient Color",
+            Default = z(255, 255, 255),
+            Flag = "world_ambient_color",
+            Callback = function(color)
+                ambient_utility:updateColor(color)
+            end
+        })
+        
+        -- Обработчик при выходе/смерти для восстановления дефолтных значений
+        g.CharacterRemoving:Connect(function()
+            ambient_utility:restoreDefaults()
+        end)
+        
+        -- Сохраняем утилиту в глобальную область
+        _G.AmbientUtility = ambient_utility
+        
+        -- Tint utility
+        local tint_utility = {}
+        local tint_state = {
+            enabled = false,
+            custom_color = z(255, 255, 255),
+            color_correction = nil
+        }
+        
+        -- Функция инициализации Tint
+        function tint_utility:init()
+            -- Ищем существующий ColorCorrection или создаем новый
+            tint_state.color_correction = game:GetService("Lighting"):FindFirstChild("FentanylTint")
+            
+            if not tint_state.color_correction then
+                tint_state.color_correction = Instance.new("ColorCorrectionEffect")
+                tint_state.color_correction.Name = "FentanylTint"
+                tint_state.color_correction.Enabled = false
+                tint_state.color_correction.TintColor = z(255, 255, 255)
+                tint_state.color_correction.Parent = game:GetService("Lighting")
+            end
+        end
+        
+        -- Функция применения tint
+        function tint_utility:applyTint()
+            if not tint_state.color_correction then
+                self:init()
+            end
+            
+            if tint_state.enabled then
+                tint_state.color_correction.Enabled = true
+                tint_state.color_correction.TintColor = tint_state.custom_color
+            else
+                tint_state.color_correction.Enabled = false
+            end
+        end
+        
+        -- Функция обновления цвета
+        function tint_utility:updateColor(color)
+            tint_state.custom_color = color
+            if tint_state.color_correction then
+                tint_state.color_correction.TintColor = color
+            end
+        end
+        
+        -- Функция включения/выключения
+        function tint_utility:setEnabled(enabled)
+            tint_state.enabled = enabled
+            self:applyTint()
+        end
+        
+        -- Функция очистки
+        function tint_utility:cleanup()
+            if tint_state.color_correction then
+                tint_state.color_correction.Enabled = false
+            end
+        end
+        
+        -- Инициализируем tint утилиту
+        tint_utility:init()
+        
+        -- Создаем UI элементы для Tint
+        local _tintToggle = worldSection:Toggle({
+            Name = "Tint",
+            Default = false,
+            Flag = "world_tint",
+            Callback = function(value)
+                tint_utility:setEnabled(value)
+            end
+        })
+        
+        -- Колорпикер для Tint
+        _tintToggle:Colorpicker({
+            Name = "Tint Color",
+            Default = z(255, 255, 255),
+            Flag = "world_tint_color",
+            Callback = function(color)
+                tint_utility:updateColor(color)
+            end
+        })
+        
+        -- Skybox utility
+        local skybox_utility = {}
+        local skybox_state = {
+            enabled = false,
+            current_type = "Galaxy",
+            original_skybox = nil,
+            custom_skybox = nil,
+            lighting = nil
+        }
+        
+        -- Skybox presets
+        local skybox_presets = {
+            ["Galaxy"] = {
+                SkyboxBk = "rbxassetid://15983968922",
+                SkyboxDn = "rbxassetid://15983966825",
+                SkyboxFt = "rbxassetid://15983965025",
+                SkyboxLf = "rbxassetid://15983967420",
+                SkyboxRt = "rbxassetid://15983966246",
+                SkyboxUp = "rbxassetid://15983964246",
+                StarCount = 0,
+                CelestialBodiesShown = true
+            },
+            ["SpongeBob"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxDn = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxFt = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxLf = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxRt = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxUp = "http://www.roblox.com/asset/?id=7633178166",
+                StarCount = 0,
+                CelestialBodiesShown = true,
+                MoonTextureId = "http://www.roblox.com/asset/?id=7633178166"
+            },
+            ["Blue"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=16876760844",
+                SkyboxDn = "http://www.roblox.com/asset/?id=16876762818",
+                SkyboxFt = "http://www.roblox.com/asset/?id=16876765234",
+                SkyboxLf = "http://www.roblox.com/asset/?id=16876767659",
+                SkyboxRt = "http://www.roblox.com/asset/?id=16876769447",
+                SkyboxUp = "http://www.roblox.com/asset/?id=16876771721",
+                StarCount = 0,
+                CelestialBodiesShown = false
+            },
+            ["Red"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=570555736",
+                SkyboxDn = "http://www.roblox.com/asset/?id=570555964",
+                SkyboxFt = "http://www.roblox.com/asset/?id=570555800",
+                SkyboxLf = "http://www.roblox.com/asset/?id=570555840",
+                SkyboxRt = "http://www.roblox.com/asset/?id=570555882",
+                SkyboxUp = "http://www.roblox.com/asset/?id=570555929",
+                StarCount = 0,
+                CelestialBodiesShown = false
+            }
+        }
+        
+        -- Функция инициализации Skybox
+        function skybox_utility:init()
+            skybox_state.lighting = game:GetService("Lighting")
+            
+            -- Сохраняем оригинальный skybox
+            local existingSkybox = skybox_state.lighting:FindFirstChildOfClass("Sky")
+            if existingSkybox then
+                skybox_state.original_skybox = {
+                    SkyboxBk = existingSkybox.SkyboxBk,
+                    SkyboxDn = existingSkybox.SkyboxDn,
+                    SkyboxFt = existingSkybox.SkyboxFt,
+                    SkyboxLf = existingSkybox.SkyboxLf,
+                    SkyboxRt = existingSkybox.SkyboxRt,
+                    SkyboxUp = existingSkybox.SkyboxUp,
+                    StarCount = existingSkybox.StarCount,
+                    CelestialBodiesShown = existingSkybox.CelestialBodiesShown,
+                    MoonTextureId = existingSkybox.MoonTextureId,
+                    SunTextureId = existingSkybox.SunTextureId,
+                    MoonAngularSize = existingSkybox.MoonAngularSize,
+                    SunAngularSize = existingSkybox.SunAngularSize
+                }
+            end
+        end
+        
+        -- Функция применения skybox
+        function skybox_utility:applySkybox()
+            if not skybox_state.lighting then
+                self:init()
+            end
+            
+            local skybox = skybox_state.lighting:FindFirstChildOfClass("Sky")
+            if not skybox then
+                skybox = Instance.new("Sky")
+                skybox.Parent = skybox_state.lighting
+            end
+            
+            if skybox_state.enabled then
+                local preset = skybox_presets[skybox_state.current_type]
+                if preset then
+                    -- Применяем настройки из пресета
+                    skybox.SkyboxBk = preset.SkyboxBk
+                    skybox.SkyboxDn = preset.SkyboxDn
+                    skybox.SkyboxFt = preset.SkyboxFt
+                    skybox.SkyboxLf = preset.SkyboxLf
+                    skybox.SkyboxRt = preset.SkyboxRt
+                    skybox.SkyboxUp = preset.SkyboxUp
+                    skybox.StarCount = preset.StarCount or 3000
+                    skybox.CelestialBodiesShown = preset.CelestialBodiesShown
+                    
+                    -- Специальные настройки для некоторых пресетов
+                    if preset.MoonTextureId then
+                        skybox.MoonTextureId = preset.MoonTextureId
+                    else
+                        skybox.MoonTextureId = "rbxasset://sky/moon.jpg"
+                    end
+                    
+                    if preset.SunTextureId then
+                        skybox.SunTextureId = preset.SunTextureId
+                    else
+                        skybox.SunTextureId = "rbxasset://sky/sun.jpg"
+                    end
+                end
+            else
+                -- Восстанавливаем оригинальный skybox
+                if skybox_state.original_skybox then
+                    skybox.SkyboxBk = skybox_state.original_skybox.SkyboxBk
+                    skybox.SkyboxDn = skybox_state.original_skybox.SkyboxDn
+                    skybox.SkyboxFt = skybox_state.original_skybox.SkyboxFt
+                    skybox.SkyboxLf = skybox_state.original_skybox.SkyboxLf
+                    skybox.SkyboxRt = skybox_state.original_skybox.SkyboxRt
+                    skybox.SkyboxUp = skybox_state.original_skybox.SkyboxUp
+                    skybox.StarCount = skybox_state.original_skybox.StarCount
+                    skybox.CelestialBodiesShown = skybox_state.original_skybox.CelestialBodiesShown
+                    skybox.MoonTextureId = skybox_state.original_skybox.MoonTextureId
+                    skybox.SunTextureId = skybox_state.original_skybox.SunTextureId
+                    skybox.MoonAngularSize = skybox_state.original_skybox.MoonAngularSize
+                    skybox.SunAngularSize = skybox_state.original_skybox.SunAngularSize
+                end
+            end
+        end
+        
+        -- Функция изменения типа skybox
+        function skybox_utility:changeType(type)
+            skybox_state.current_type = type
+            if skybox_state.enabled then
+                self:applySkybox()
+            end
+        end
+        
+        -- Функция включения/выключения
+        function skybox_utility:setEnabled(enabled)
+            skybox_state.enabled = enabled
+            self:applySkybox()
+        end
+        
+        -- Функция очистки
+        function skybox_utility:cleanup()
+            if skybox_state.original_skybox and skybox_state.lighting then
+                local skybox = skybox_state.lighting:FindFirstChildOfClass("Sky")
+                if skybox then
+                    skybox.SkyboxBk = skybox_state.original_skybox.SkyboxBk
+                    skybox.SkyboxDn = skybox_state.original_skybox.SkyboxDn
+                    skybox.SkyboxFt = skybox_state.original_skybox.SkyboxFt
+                    skybox.SkyboxLf = skybox_state.original_skybox.SkyboxLf
+                    skybox.SkyboxRt = skybox_state.original_skybox.SkyboxRt
+                    skybox.SkyboxUp = skybox_state.original_skybox.SkyboxUp
+                    skybox.StarCount = skybox_state.original_skybox.StarCount
+                    skybox.CelestialBodiesShown = skybox_state.original_skybox.CelestialBodiesShown
+                    skybox.MoonTextureId = skybox_state.original_skybox.MoonTextureId
+                    skybox.SunTextureId = skybox_state.original_skybox.SunTextureId
+                end
+            end
+        end
+        
+        -- Инициализируем skybox утилиту
+        skybox_utility:init()
+        
+        -- Создаем UI элементы для Skybox
+        local _skyboxToggle = worldSection:Toggle({
+            Name = "Skybox",
+            Default = false,
+            Flag = "world_skybox",
+            Callback = function(value)
+                skybox_utility:setEnabled(value)
+            end
+        })
+        
+        -- Дропдаун для выбора типа skybox
+        worldSection:Dropdown({
+            Name = "Skybox Type",
+            Items = {"Galaxy", "SpongeBob", "Blue", "Red"},
+            Default = "Galaxy",
+            Flag = "world_skybox_type",
+            Callback = function(value)
+                skybox_utility:changeType(value)
+            end
+        })
+        
+        -- Color Correction utility
+        local color_correction_utility = {}
+        local color_correction_state = {
+            enabled = false,
+            saturation = 0,
+            brightness = 0,
+            contrast = 0,
+            color_correction = nil
+        }
+        
+        -- Функция инициализации Color Correction
+        function color_correction_utility:init()
+            -- Ищем существующий ColorCorrection или создаем новый
+            color_correction_state.color_correction = game:GetService("Lighting"):FindFirstChild("FentanylColorCorrection")
+            
+            if not color_correction_state.color_correction then
+                color_correction_state.color_correction = Instance.new("ColorCorrectionEffect")
+                color_correction_state.color_correction.Name = "FentanylColorCorrection"
+                color_correction_state.color_correction.Enabled = false
+                color_correction_state.color_correction.Saturation = 0
+                color_correction_state.color_correction.Brightness = 0
+                color_correction_state.color_correction.Contrast = 0
+                color_correction_state.color_correction.Parent = game:GetService("Lighting")
+            end
+        end
+        
+        -- Функция применения color correction
+        function color_correction_utility:applyCorrection()
+            if not color_correction_state.color_correction then
+                self:init()
+            end
+            
+            if color_correction_state.enabled then
+                color_correction_state.color_correction.Enabled = true
+                color_correction_state.color_correction.Saturation = color_correction_state.saturation
+                color_correction_state.color_correction.Brightness = color_correction_state.brightness
+                color_correction_state.color_correction.Contrast = color_correction_state.contrast
+            else
+                color_correction_state.color_correction.Enabled = false
+            end
+        end
+        
+        -- Функция обновления saturation
+        function color_correction_utility:updateSaturation(value)
+            color_correction_state.saturation = value
+            if color_correction_state.color_correction and color_correction_state.enabled then
+                color_correction_state.color_correction.Saturation = value
+            end
+        end
+        
+        -- Функция обновления brightness
+        function color_correction_utility:updateBrightness(value)
+            color_correction_state.brightness = value
+            if color_correction_state.color_correction and color_correction_state.enabled then
+                color_correction_state.color_correction.Brightness = value
+            end
+        end
+        
+        -- Функция обновления contrast
+        function color_correction_utility:updateContrast(value)
+            color_correction_state.contrast = value
+            if color_correction_state.color_correction and color_correction_state.enabled then
+                color_correction_state.color_correction.Contrast = value
+            end
+        end
+        
+        -- Функция включения/выключения
+        function color_correction_utility:setEnabled(enabled)
+            color_correction_state.enabled = enabled
+            self:applyCorrection()
+        end
+        
+        -- Функция очистки
+        function color_correction_utility:cleanup()
+            if color_correction_state.color_correction then
+                color_correction_state.color_correction.Enabled = false
+            end
+        end
+        
+        -- Инициализируем color correction утилиту
+        color_correction_utility:init()
+        
+        -- Создаем UI элементы для Color Correction
+        local _colorCorrectionToggle = worldSection:Toggle({
+            Name = "Color Correction",
+            Default = false,
+            Flag = "world_color_correction",
+            Callback = function(value)
+                color_correction_utility:setEnabled(value)
+            end
+        })
+        
+        -- Слайдер для Saturation
+        worldSection:Slider({
+            Name = "Saturation",
+            Min = -1,
+            Max = 1,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_saturation",
+            Callback = function(value)
+                color_correction_utility:updateSaturation(value)
+            end
+        })
+        
+        -- Слайдер для Brightness
+        worldSection:Slider({
+            Name = "Brightness",
+            Min = -1,
+            Max = 1,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_brightness",
+            Callback = function(value)
+                color_correction_utility:updateBrightness(value)
+            end
+        })
+        
+        -- Слайдер для Contrast
+        worldSection:Slider({
+            Name = "Contrast",
+            Min = -1,
+            Max = 1,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_contrast",
+            Callback = function(value)
+                color_correction_utility:updateContrast(value)
+            end
+        })
+        
+        -- Atmosphere utility
+        local atmosphere_utility = {}
+        local atmosphere_state = {
+            enabled = false,
+            color = z(199, 199, 199),
+            decay = z(92, 60, 13),
+            density = 0.395,
+            haze = 0,
+            glare = 0,
+            offset = 0,
+            atmosphere = nil
+        }
+        
+        -- Функция инициализации Atmosphere
+        function atmosphere_utility:init()
+            -- Ищем существующий Atmosphere или создаем новый
+            atmosphere_state.atmosphere = game:GetService("Lighting"):FindFirstChild("FentanylAtmosphere")
+            
+            if not atmosphere_state.atmosphere then
+                atmosphere_state.atmosphere = Instance.new("Atmosphere")
+                atmosphere_state.atmosphere.Name = "FentanylAtmosphere"
+                atmosphere_state.atmosphere.Color = atmosphere_state.color
+                atmosphere_state.atmosphere.Decay = atmosphere_state.decay
+                atmosphere_state.atmosphere.Density = atmosphere_state.density
+                atmosphere_state.atmosphere.Haze = atmosphere_state.haze
+                atmosphere_state.atmosphere.Glare = atmosphere_state.glare
+                atmosphere_state.atmosphere.Offset = atmosphere_state.offset
+                atmosphere_state.atmosphere.Parent = game:GetService("Lighting")
+            end
+        end
+        
+        -- Функция применения atmosphere
+        function atmosphere_utility:applyAtmosphere()
+            if not atmosphere_state.atmosphere then
+                self:init()
+            end
+            
+            if atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Color = atmosphere_state.color
+                atmosphere_state.atmosphere.Decay = atmosphere_state.decay
+                atmosphere_state.atmosphere.Density = atmosphere_state.density
+                atmosphere_state.atmosphere.Haze = atmosphere_state.haze
+                atmosphere_state.atmosphere.Glare = atmosphere_state.glare
+                atmosphere_state.atmosphere.Offset = atmosphere_state.offset
+            else
+                -- Восстанавливаем дефолтные значения
+                atmosphere_state.atmosphere.Color = z(199, 199, 199)
+                atmosphere_state.atmosphere.Decay = z(92, 60, 13)
+                atmosphere_state.atmosphere.Density = 0.395
+                atmosphere_state.atmosphere.Haze = 0
+                atmosphere_state.atmosphere.Glare = 0
+                atmosphere_state.atmosphere.Offset = 0
+            end
+        end
+        
+        -- Функция обновления цвета
+        function atmosphere_utility:updateColor(color)
+            atmosphere_state.color = color
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Color = color
+            end
+        end
+        
+        -- Функция обновления decay
+        function atmosphere_utility:updateDecay(color)
+            atmosphere_state.decay = color
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Decay = color
+            end
+        end
+        
+        -- Функция обновления density
+        function atmosphere_utility:updateDensity(value)
+            atmosphere_state.density = value
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Density = value
+            end
+        end
+        
+        -- Функция обновления haze
+        function atmosphere_utility:updateHaze(value)
+            atmosphere_state.haze = value
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Haze = value
+            end
+        end
+        
+        -- Функция обновления glare
+        function atmosphere_utility:updateGlare(value)
+            atmosphere_state.glare = value
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Glare = value
+            end
+        end
+        
+        -- Функция обновления offset
+        function atmosphere_utility:updateOffset(value)
+            atmosphere_state.offset = value
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Offset = value
+            end
+        end
+        
+        -- Функция включения/выключения
+        function atmosphere_utility:setEnabled(enabled)
+            atmosphere_state.enabled = enabled
+            self:applyAtmosphere()
+        end
+        
+        -- Функция очистки
+        function atmosphere_utility:cleanup()
+            if atmosphere_state.atmosphere then
+                -- Восстанавливаем дефолтные значения
+                atmosphere_state.atmosphere.Color = z(199, 199, 199)
+                atmosphere_state.atmosphere.Decay = z(92, 60, 13)
+                atmosphere_state.atmosphere.Density = 0.395
+                atmosphere_state.atmosphere.Haze = 0
+                atmosphere_state.atmosphere.Glare = 0
+                atmosphere_state.atmosphere.Offset = 0
+            end
+        end
+        
+        -- Инициализируем atmosphere утилиту
+        atmosphere_utility:init()
+        
+        -- Создаем UI элементы для Atmosphere
+        local _atmosphereToggle = worldSection:Toggle({
+            Name = "Atmosphere",
+            Default = false,
+            Flag = "world_atmosphere",
+            Callback = function(value)
+                atmosphere_utility:setEnabled(value)
+            end
+        })
+        
+        -- Колорпикер для Color
+        _atmosphereToggle:Colorpicker({
+            Name = "Color",
+            Default = z(199, 199, 199),
+            Flag = "world_atmosphere_color",
+            Callback = function(color)
+                atmosphere_utility:updateColor(color)
+            end
+        })
+        
+        -- Колорпикер для Decay
+        _atmosphereToggle:Colorpicker({
+            Name = "Decay",
+            Default = z(92, 60, 13),
+            Flag = "world_atmosphere_decay",
+            Callback = function(color)
+                atmosphere_utility:updateDecay(color)
+            end
+        })
+        
+        -- Слайдер для Density
+        worldSection:Slider({
+            Name = "Density",
+            Min = 0,
+            Max = 1,
+            Default = 0.395,
+            Decimals = 0.01,
+            Flag = "world_atmosphere_density",
+            Callback = function(value)
+                atmosphere_utility:updateDensity(value)
+            end
+        })
+        
+        -- Слайдер для Haze
+        worldSection:Slider({
+            Name = "Haze",
+            Min = 0,
+            Max = 3,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_atmosphere_haze",
+            Callback = function(value)
+                atmosphere_utility:updateHaze(value)
+            end
+        })
+        
+        -- Слайдер для Glare
+        worldSection:Slider({
+            Name = "Glare",
+            Min = 0,
+            Max = 2,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_atmosphere_glare",
+            Callback = function(value)
+                atmosphere_utility:updateGlare(value)
+            end
+        })
+        
+        -- Слайдер для Offset
+        worldSection:Slider({
+            Name = "Offset",
+            Min = 0,
+            Max = 1,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_atmosphere_offset",
+            Callback = function(value)
+                atmosphere_utility:updateOffset(value)
+            end
+        })
+        
+        -- Time utility
+        local time_utility = {}
+        local time_state = {
+            enabled = false,
+            hours = 12,
+            minutes = 0,
+            lighting = nil,
+            update_connection = nil
+        }
+        
+        -- Функция инициализации Time
+        function time_utility:init()
+            time_state.lighting = game:GetService("Lighting")
+        end
+        
+        -- Функция применения времени
+        function time_utility:applyTime()
+            if not time_state.lighting then
+                self:init()
+            end
+            
+            if time_state.enabled then
+                -- Отключаем предыдущее соединение если есть
+                if time_state.update_connection then
+                    time_state.update_connection:Disconnect()
+                    time_state.update_connection = nil
+                end
+                
+                -- Создаем соединение для постоянного обновления времени
+                time_state.update_connection = b.Heartbeat:Connect(function()
+                    if time_state.lighting then
+                        -- Конвертируем часы и минуты в формат ClockTime
+                        local clockTime = time_state.hours + (time_state.minutes / 60)
+                        time_state.lighting.ClockTime = clockTime
+                    end
+                end)
+            else
+                -- Отключаем обновление времени
+                if time_state.update_connection then
+                    time_state.update_connection:Disconnect()
+                    time_state.update_connection = nil
+                end
+            end
+        end
+        
+        -- Функция обновления часов
+        function time_utility:updateHours(value)
+            time_state.hours = value
+            if time_state.enabled and time_state.lighting then
+                local clockTime = time_state.hours + (time_state.minutes / 60)
+                time_state.lighting.ClockTime = clockTime
+            end
+        end
+        
+        -- Функция обновления минут
+        function time_utility:updateMinutes(value)
+            time_state.minutes = value
+            if time_state.enabled and time_state.lighting then
+                local clockTime = time_state.hours + (time_state.minutes / 60)
+                time_state.lighting.ClockTime = clockTime
+            end
+        end
+        
+        -- Функция включения/выключения
+        function time_utility:setEnabled(enabled)
+            time_state.enabled = enabled
+            self:applyTime()
+        end
+        
+        -- Функция очистки
+        function time_utility:cleanup()
+            if time_state.update_connection then
+                time_state.update_connection:Disconnect()
+                time_state.update_connection = nil
+            end
+        end
+        
+        -- Инициализируем time утилиту
+        time_utility:init()
+        
+        -- Создаем UI элементы для Time
+        local _timeToggle = worldSection:Toggle({
+            Name = "Time",
+            Default = false,
+            Flag = "world_time",
+            Callback = function(value)
+                time_utility:setEnabled(value)
+            end
+        })
+        
+        -- Слайдер для Hours
+        worldSection:Slider({
+            Name = "Hours",
+            Min = 0,
+            Max = 23,
+            Default = 12,
+            Decimals = 1,
+            Flag = "world_time_hours",
+            Callback = function(value)
+                time_utility:updateHours(value)
+            end
+        })
+        
+        -- Слайдер для Minutes
+        worldSection:Slider({
+            Name = "Minutes",
+            Min = 0,
+            Max = 59,
+            Default = 0,
+            Decimals = 1,
+            Flag = "world_time_minutes",
+            Callback = function(value)
+                time_utility:updateMinutes(value)
+            end
+        })
+        
+        -- Обработчики очистки при выходе
+        g.CharacterRemoving:Connect(function()
+            ambient_utility:restoreDefaults()
+            tint_utility:cleanup()
+            skybox_utility:cleanup()
+            color_correction_utility:cleanup()
+            atmosphere_utility:cleanup()
+            time_utility:cleanup()
+        end)
+        
+        -- Сохраняем утилиты в глобальную область
+        _G.AmbientUtility = ambient_utility
+        _G.TintUtility = tint_utility
+        _G.SkyboxUtility = skybox_utility
+        _G.ColorCorrectionUtility = color_correction_utility
+        _G.AtmosphereUtility = atmosphere_utility
+        _G.TimeUtility = time_utility
+        
+    end
+    
 end -- End Visuals Tab
 
 do -- Watermark & Keybinds
