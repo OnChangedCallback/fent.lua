@@ -270,7 +270,10 @@ _G.ESP_Config = {
             box = false,
             boxColor = { Color3.new(1,0,0), 1 }
         }
-    }
+    },
+    -- Дополнительные настройки ESP
+    LimitDistance = false,
+    MaxDistance = 1000
 }
 
 -- Константы для вершин
@@ -622,6 +625,19 @@ function Rendering.update(player)
         Rendering.clear_esp(player)
         return
     end
+    
+    -- Проверка ограничения дистанции
+    if _G.ESP_Config and _G.ESP_Config.LimitDistance then
+        local localRootPart = a8:FindFirstChild("HumanoidRootPart")
+        if localRootPart then
+            local distance = (aa.Position - localRootPart.Position).Magnitude
+            if distance > (_G.ESP_Config.MaxDistance or 1000) then
+                Rendering.clear_esp(player)
+                return
+            end
+        end
+    end
+    
     local ac = a9:WorldToViewportPoint(aa.Position)
     local ad =
         (a9:WorldToViewportPoint(aa.Position - vars.Vector3(0, 1, 0)).Y -
