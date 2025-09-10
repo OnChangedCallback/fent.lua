@@ -3615,6 +3615,293 @@ do -- Visuals Tab
         
     end
     
+    do -- Local Section
+        local localSection = N:Section({Name = "Local", Side = 1})
+        
+        -- Local Highlight и SelfMaterial структура данных
+        local localHighlightData = {
+            hl = nil,
+            char_added_conn = nil,
+            char_removing_conn = nil,
+            died_conn = nil,
+            original_materials = {},  -- хранение оригинальных материалов
+            original_colors = {}      -- хранение оригинальных цветов
+        }
+        
+        -- Функция создания local highlight
+        local function createLocalHighlight()
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "LOCAL_HL_32v"
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            return highlight
+        end
+        
+        -- Функция сохранения оригинальных материалов и цветов
+        local function saveOriginalProperties(character)
+            if not character then return end
+            
+            localHighlightData.original_materials = {}
+            localHighlightData.original_colors = {}
+            
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    localHighlightData.original_materials[part] = part.Material
+                    localHighlightData.original_colors[part] = part.Color
+                end
+            end
+        end
+        
+        -- Функция применения ForceField материала
+        local function applySelfMaterial(character)
+            if not character or not K.Flags or not K.Flags["self_material"] then
+                return
+            end
+            
+            local selfColor = K.Flags["self_material_color"] or z(255, 255, 255)
+            
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.Material = Enum.Material.ForceField
+                    part.Color = selfColor
+                end
+            end
+        end
+        
+        -- Функция восстановления оригинальных материалов
+        local function restoreOriginalMaterials(character)
+            if not character then return end
+            
+            -- Восстанавливаем материалы и цвета для всех частей персонажа
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    -- Восстанавливаем материал если он был сохранен
+                    if localHighlightData.original_materials[part] then
+                        part.Material = localHighlightData.original_materials[part]
+                    end
+                    -- Восстанавливаем цвет если он был сохранен
+                    if localHighlightData.original_colors[part] then
+                        part.Color = localHighlightData.original_colors[part]
+                    end
+                end
+            end
+        end
+        
+        -- Функция очистки local highlight
+        local function cleanupLocalHighlight()
+            if localHighlightData.hl then
+                localHighlightData.hl:Destroy()
+                localHighlightData.hl = nil
+            end
+        end
+        
+        -- Функция применения local highlight
+        local function applyLocalHighlight(character)
+            if not character or not K.Flags or not K.Flags["local_highlight"] then
+                cleanupLocalHighlight()
+                return
+            end
+            
+            -- Создаем highlight объект если его нет
+            if not localHighlightData.hl then
+                localHighlightData.hl = createLocalHighlight()
+            end
+            
+            local highlight = localHighlightData.hl
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            
+            -- Получаем цвета и transparency из флагов
+            local fillColor = K.Flags["local_highlight_fill"]
+            local fillAlpha = K.Flags["local_highlight_fill_alpha"]
+            local outlineColor = K.Flags["local_highlight_outline"]
+            local outlineAlpha = K.Flags["local_highlight_outline_alpha"]
+            
+            -- Применяем Fill Color и Transparency
+            highlight.FillColor = fillColor or z(255, 255, 0)
+            highlight.FillTransparency = fillAlpha or 0.5
+            
+            -- Применяем Outline Color и Transparency
+            highlight.OutlineColor = outlineColor or z(0, 0, 0)
+            highlight.OutlineTransparency = outlineAlpha or 0.5
+            
+            highlight.Adornee = character
+            highlight.Parent = character
+            highlight.Enabled = true
+        end
+        
+        -- Функция настройки Died connection для локального игрока
+        local function setupLocalDiedConnection(character)
+            if not character then return end
+            
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                if localHighlightData.died_conn then
+                    localHighlightData.died_conn:Disconnect()
+                end
+                
+                localHighlightData.died_conn = humanoid.Died:Connect(function()
+                    cleanupLocalHighlight()
+                end)
+            end
+        end
+        
+        -- Функция привязки к локальному игроку
+        local function bindToLocalPlayer()
+            local localPlayer = g -- локальный игрок
+            if not localPlayer then return end
+            
+            -- Отключаем старые соединения
+            if localHighlightData.char_added_conn then
+                localHighlightData.char_added_conn:Disconnect()
+            end
+            if localHighlightData.char_removing_conn then
+                localHighlightData.char_removing_conn:Disconnect()
+            end
+            
+            -- При удалении персонажа - очищаем highlight и восстанавливаем материалы
+            localHighlightData.char_removing_conn = localPlayer.CharacterRemoving:Connect(function(character)
+                cleanupLocalHighlight()
+                if K.Flags and K.Flags["self_material"] then
+                    restoreOriginalMaterials(character)
+                end
+            end)
+            
+            -- При добавлении персонажа - применяем все эффекты
+            localHighlightData.char_added_conn = localPlayer.CharacterAdded:Connect(function(character)
+                -- Сохраняем оригинальные свойства
+                saveOriginalProperties(character)
+                
+                -- Применяем highlight если включен
+                if K.Flags and K.Flags["local_highlight"] then
+                    applyLocalHighlight(character)
+                    setupLocalDiedConnection(character)
+                end
+                
+                -- Применяем материал если включен
+                if K.Flags and K.Flags["self_material"] then
+                    applySelfMaterial(character)
+                end
+            end)
+            
+            -- Если персонаж уже существует - применяем все эффекты сразу
+            if localPlayer.Character then
+                saveOriginalProperties(localPlayer.Character)
+                
+                if K.Flags and K.Flags["local_highlight"] then
+                    applyLocalHighlight(localPlayer.Character)
+                    setupLocalDiedConnection(localPlayer.Character)
+                end
+                
+                if K.Flags and K.Flags["self_material"] then
+                    applySelfMaterial(localPlayer.Character)
+                end
+            end
+        end
+        
+        -- Local Highlight Toggle
+        local _localHighlightToggle = localSection:Toggle({
+            Name = "Highlight",
+            Default = false,
+            Flag = "local_highlight",
+            Callback = function(value)
+                if value then
+                    bindToLocalPlayer()
+                    -- Если персонаж уже есть - применяем highlight
+                    if g and g.Character then
+                        applyLocalHighlight(g.Character)
+                        setupLocalDiedConnection(g.Character)
+                    end
+                else
+                    cleanupLocalHighlight()
+                    -- Отключаем соединения
+                    if localHighlightData.char_added_conn then
+                        localHighlightData.char_added_conn:Disconnect()
+                        localHighlightData.char_added_conn = nil
+                    end
+                    if localHighlightData.char_removing_conn then
+                        localHighlightData.char_removing_conn:Disconnect()
+                        localHighlightData.char_removing_conn = nil
+                    end
+                    if localHighlightData.died_conn then
+                        localHighlightData.died_conn:Disconnect()
+                        localHighlightData.died_conn = nil
+                    end
+                end
+            end
+        })
+        
+        -- Self Material Toggle
+        local _selfMaterialToggle = localSection:Toggle({
+            Name = "Self Material",
+            Default = false,
+            Flag = "self_material",
+            Callback = function(value)
+                if value then
+                    -- Если персонаж уже есть - сохраняем оригинальные свойства и применяем материал
+                    if g and g.Character then
+                        saveOriginalProperties(g.Character)
+                        applySelfMaterial(g.Character)
+                    end
+                    -- Привязываемся к игроку если еще не привязаны
+                    if not localHighlightData.char_added_conn then
+                        bindToLocalPlayer()
+                    end
+                else
+                    -- Восстанавливаем оригинальные материалы
+                    if g and g.Character then
+                        restoreOriginalMaterials(g.Character)
+                    end
+                end
+            end
+        })
+        
+        -- Self Material Color Picker
+        _selfMaterialToggle:Colorpicker({
+            Name = "Color",
+            Default = z(255, 255, 255),
+            Flag = "self_material_color",
+            Callback = function(color)
+                K.Flags["self_material_color"] = color
+                -- Обновляем цвет если Self Material активен
+                if K.Flags["self_material"] and g and g.Character then
+                    applySelfMaterial(g.Character)
+                end
+            end
+        })
+        
+        -- Local Highlight Fill Color Picker
+        _localHighlightToggle:Colorpicker({
+            Name = "Fill Color",
+            Default = z(255, 255, 0),
+            Alpha = 0.5,
+            Flag = "local_highlight_fill",
+            Callback = function(color, alpha)
+                K.Flags["local_highlight_fill"] = color
+                K.Flags["local_highlight_fill_alpha"] = alpha
+                -- Обновляем highlight если он активен
+                if K.Flags["local_highlight"] and g and g.Character then
+                    applyLocalHighlight(g.Character)
+                end
+            end
+        })
+        
+        -- Local Highlight Outline Color Picker
+        _localHighlightToggle:Colorpicker({
+            Name = "Outline Color",
+            Default = z(0, 0, 0),
+            Alpha = 0.5,
+            Flag = "local_highlight_outline",
+            Callback = function(color, alpha)
+                K.Flags["local_highlight_outline"] = color
+                K.Flags["local_highlight_outline_alpha"] = alpha
+                -- Обновляем highlight если он активен
+                if K.Flags["local_highlight"] and g and g.Character then
+                    applyLocalHighlight(g.Character)
+                end
+            end
+        })
+        
+    end
+    
     do -- Stuff Section
         local stuffSection = N:Section({Name = "Stuff", Side = 2})
         
