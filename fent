@@ -4044,6 +4044,143 @@ do -- Visuals Tab
         
     end
     
+    do -- idk Section
+        local idkSection = N:Section({Name = "idk", Side = 1})
+        
+        -- Texture system state
+        local texture_state = {
+            enabled = false,
+            material = "Plastic",
+            original_materials = {},
+            affected_parts = {}
+        }
+        
+        -- Все доступные материалы в Roblox
+        local materials_list = {
+            "Plastic",
+            "Wood",
+            "WoodPlanks", 
+            "Marble",
+            "Basalt",
+            "Slate",
+            "CrackedLava",
+            "Concrete",
+            "Limestone",
+            "Granite",
+            "Pavement",
+            "Brick",
+            "Pebble",
+            "Cobblestone",
+            "Rock",
+            "Sandstone",
+            "CorrodedMetal",
+            "DiamondPlate",
+            "Foil",
+            "Metal",
+            "Grass",
+            "LeafyGrass",
+            "Sand",
+            "Fabric",
+            "Snow",
+            "Mud",
+            "Ground",
+            "Asphalt",
+            "Salt",
+            "Ice",
+            "Glass",
+            "Neon",
+            "ForceField",
+            "Air",
+            "Water",
+            "Carpet",
+            "CarpetShag",
+            "Plaster",
+            "CardBoard",
+            "Leather",
+            "Coal",
+            "Rubber"
+        }
+        
+        -- Utility функция для изменения материалов
+        local function applyTextures()
+            if not texture_state.enabled then
+                -- Восстанавливаем оригинальные материалы
+                for part, original_material in pairs(texture_state.original_materials) do
+                    if part and part.Parent then
+                        pcall(function()
+                            part.Material = original_material
+                        end)
+                    end
+                end
+                texture_state.original_materials = {}
+                texture_state.affected_parts = {}
+                return
+            end
+            
+            -- Сохраняем и изменяем материалы
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") and obj.Parent ~= g.Character then
+                    -- Сохраняем оригинальный материал если еще не сохранен
+                    if not texture_state.original_materials[obj] then
+                        texture_state.original_materials[obj] = obj.Material
+                    end
+                    
+                    -- Применяем новый материал
+                    pcall(function()
+                        obj.Material = Enum.Material[texture_state.material]
+                    end)
+                    
+                    texture_state.affected_parts[obj] = true
+                end
+            end
+        end
+        
+        -- Функция обновления при изменении workspace
+        local function setupWorkspaceListener()
+            workspace.DescendantAdded:Connect(function(obj)
+                if texture_state.enabled and obj:IsA("BasePart") and obj.Parent ~= g.Character then
+                    task.wait(0.1) -- Небольшая задержка для загрузки объекта
+                    if not texture_state.original_materials[obj] then
+                        texture_state.original_materials[obj] = obj.Material
+                    end
+                    pcall(function()
+                        obj.Material = Enum.Material[texture_state.material]
+                    end)
+                    texture_state.affected_parts[obj] = true
+                end
+            end)
+        end
+        
+        -- Textures Toggle
+        local _texturesToggle = idkSection:Toggle({
+            Name = "Textures",
+            Flag = "textures_enabled",
+            Default = false,
+            Callback = function(value)
+                texture_state.enabled = value
+                applyTextures()
+            end
+        })
+        
+        -- Material Dropdown
+        local _materialDropdown = idkSection:Dropdown({
+            Name = "Material Type",
+            Items = materials_list,
+            Default = "Plastic",
+            Flag = "texture_material",
+            Callback = function(value)
+                texture_state.material = value
+                if texture_state.enabled then
+                    applyTextures()
+                end
+            end
+        })
+        
+        -- Инициализация listener для новых объектов
+        setupWorkspaceListener()
+        
+    end
+    
     do -- Stuff Section
         local stuffSection = N:Section({Name = "Stuff", Side = 2})
         
