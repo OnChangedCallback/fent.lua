@@ -1150,7 +1150,7 @@ local L =
 local M = L:Page({Name = "Ragebot", Columns = 2})
 local N = L:Page({Name = "Visuals", Columns = 2})
 local ESP_Page = L:Page({Name = "ESP", Columns = 2})
--- local O = L:Page({Name = "Misc", Columns = 2})
+local MiscPage = L:Page({Name = "Misc", Columns = 2})
 -- local P = L:Page({Name = "AntiAim", Columns = 2})
 
 do -- Ragebot Tab
@@ -7446,6 +7446,118 @@ do -- Settings Tab
                 end
             }
         )
+    end
+end
+
+do -- Misc Tab
+    
+    
+    do -- Movement Section
+        local MovementSection = MiscPage:Section({Name = "Movement", Side = 1})
+        
+        -- Speed utility
+        local speed_utility = {}
+        local speed_state = {
+            enabled = false,
+            active = false,
+            speed = 50,
+            connection = nil,
+            char_cache = {
+                root = nil,
+                humanoid = nil
+            }
+        }
+        
+        function speed_utility:updateCharacter(character)
+            if not character then return end
+            
+            speed_state.char_cache.root = character:WaitForChild("HumanoidRootPart")
+            speed_state.char_cache.humanoid = character:WaitForChild("Humanoid")
+            
+            if speed_state.connection then
+                speed_state.connection:Disconnect()
+                speed_state.connection = nil
+            end
+            
+            if speed_state.enabled then
+                speed_state.connection = b.Heartbeat:Connect(function(dt)
+                    if speed_state.enabled and speed_state.active then
+                        local moveDirection = speed_state.char_cache.humanoid.MoveDirection
+                        if moveDirection.Magnitude > 0 then
+                            speed_state.char_cache.root.CFrame = speed_state.char_cache.root.CFrame + (moveDirection.Unit * speed_state.speed * dt)
+                        end
+                    end
+                end)
+            end
+        end
+        
+        function speed_utility:enable()
+            speed_state.enabled = true
+            speed_state.active = true
+            if g.Character then
+                self:updateCharacter(g.Character)
+            end
+        end
+        
+        function speed_utility:disable()
+            speed_state.enabled = false
+            speed_state.active = false
+            if speed_state.connection then
+                speed_state.connection:Disconnect()
+                speed_state.connection = nil
+            end
+        end
+        
+        function speed_utility:setSpeed(value)
+            local num = tonumber(value)
+            if num then
+                speed_state.speed = math.clamp(num, 1, 2000)
+            end
+        end
+        
+        -- Character respawn support
+        g.CharacterAdded:Connect(function(char)
+            if speed_state.enabled then
+                speed_utility:updateCharacter(char)
+            end
+        end)
+        
+        -- UI Elements
+        local SpeedToggle = MovementSection:Toggle({
+            Name = "Speed",
+            Flag = "SpeedEnabled",
+            Default = false,
+            Callback = function(value)
+                if value then
+                    speed_utility:enable()
+                else
+                    speed_utility:disable()
+                end
+            end
+        })
+        
+        local SpeedTextbox = MovementSection:Textbox({
+            Name = "Speed Value",
+            Default = "50",
+            Placeholder = "Enter speed...",
+            Flag = "SpeedValue",
+            Callback = function(value)
+                speed_utility:setSpeed(value)
+            end
+        })
+        
+        -- Keybind for toggle
+        SpeedToggle:Keybind({
+            Name = "Speed Key",
+            Mode = "Toggle",
+            Default = Enum.KeyCode.V,
+            Flag = "SpeedKey",
+            Callback = function()
+                if speed_state.enabled then
+                    speed_state.active = not speed_state.active
+                end
+            end
+        })
     end
 end
 
