@@ -1,0 +1,1393 @@
+-- VARS таблица (глобальная)
+local vars = {
+    -- Services
+    RunService = game:GetService("RunService"),
+    Players = game:GetService("Players"),
+    CoreGui = game:GetService("CoreGui"),
+    HttpService = game:GetService("HttpService"),
+    GuiService = game:GetService("GuiService"),
+    
+    -- Objects
+    Camera = workspace.CurrentCamera,
+    LocalPlayer = game:GetService("Players").LocalPlayer,
+    
+    -- Functions
+    math = math,
+    tick = tick,
+    os = os,
+    pcall = pcall,
+    pairs = pairs,
+    ipairs = ipairs,
+    
+    -- Constructors
+    Vector2 = Vector2.new,
+    Vector3 = Vector3.new,
+    UDim2 = UDim2.new,
+    Color3 = Color3.fromRGB,
+    Instance = Instance.new,
+    Drawing = Drawing.new,
+    
+    -- Math functions
+    floor = math.floor,
+    round = math.round,
+    atan2 = math.atan2,
+    sin = math.sin,
+    cos = math.cos,
+    clamp = math.clamp,
+    
+    -- Table functions
+    clear = table.clear,
+    unpack = table.unpack,
+    find = table.find,
+    
+    -- CFrame functions
+    toOrientation = CFrame.identity.ToOrientation,
+    pointToObjectSpace = CFrame.identity.PointToObjectSpace,
+    
+    -- Color/Vector functions
+    lerpColor = Color3.new().Lerp,
+    min2 = Vector2.zero.Min,
+    max2 = Vector2.zero.Max,
+    lerp2 = Vector2.zero.Lerp,
+    min3 = Vector3.zero.Min,
+    max3 = Vector3.zero.Max,
+    
+    -- Camera functions
+    wtvp = workspace.CurrentCamera.WorldToViewportPoint,
+    
+    -- Instance functions
+    isA = workspace.IsA,
+    getPivot = workspace.GetPivot,
+    findFirstChild = workspace.FindFirstChild,
+    findFirstChildOfClass = workspace.FindFirstChildOfClass,
+    getChildren = workspace.GetChildren,
+    
+    -- Enums
+    Enum = Enum,
+    ColorSequence = ColorSequence,
+    ColorSequenceKeypoint = ColorSequenceKeypoint
+}
+
+-- Utility библиотека
+local utility = {}
+local Utils = {
+    pairs = pairs,
+    ipairs = ipairs,
+    pcall = pcall
+}
+
+do -- Utility functions
+    function utility.isBodyPart(name)
+        return name == "Head" or name:find("Torso") or name:find("Leg") or name:find("Arm")
+    end
+    
+    function utility.getBoundingBox(parts)
+        local min, max
+        for i = 1, #parts do
+            local part = parts[i]
+            local cframe, size = part.CFrame, part.Size
+            
+            min = vars.min3(min or cframe.Position, (cframe - size*0.5).Position)
+            max = vars.max3(max or cframe.Position, (cframe + size*0.5).Position)
+        end
+        
+        local center = (min + max)*0.5
+        local front = vars.Vector3(center.X, center.Y, max.Z)
+        return CFrame.new(center, front), max - min
+    end
+    
+    function utility.worldToScreen(world)
+        local screen, inBounds = vars.wtvp(vars.Camera, world)
+        return vars.Vector2(screen.X, screen.Y), inBounds, screen.Z
+    end
+    
+    function utility.calculateCorners(cframe, size, vertices)
+        local corners = {}
+        for i = 1, #vertices do
+            corners[i] = utility.worldToScreen((cframe + size*0.5*vertices[i]).Position)
+        end
+        
+        local min = vars.min2(vars.Camera.ViewportSize, vars.unpack(corners))
+        local max = vars.max2(vars.Vector2.zero, vars.unpack(corners))
+        return {
+            corners = corners,
+            topLeft = vars.Vector2(vars.floor(min.X), vars.floor(min.Y)),
+            topRight = vars.Vector2(vars.floor(max.X), vars.floor(min.Y)),
+            bottomLeft = vars.Vector2(vars.floor(min.X), vars.floor(max.Y)),
+            bottomRight = vars.Vector2(vars.floor(max.X), vars.floor(max.Y))
+        }
+    end
+    
+    function utility.rotateVector(vector, radians)
+        local c, s = vars.cos(radians), vars.sin(radians)
+        return vars.Vector2(c*vector.X - s*vector.Y, s*vector.X + c*vector.Y)
+    end
+    
+    function utility.getCharacter(player)
+        return player.Character
+    end
+    
+    function utility.getHealth(character)
+        local humanoid = character and vars.findFirstChildOfClass(character, "Humanoid")
+        if humanoid then
+            return humanoid.Health, humanoid.MaxHealth
+        end
+        return 100, 100
+    end
+    
+    function utility.isFriendly(player)
+        return player.Team and player.Team == vars.LocalPlayer.Team
+    end
+    
+    function utility.getWeapon(player)
+        return "Unknown"
+    end
+    
+    function utility.decodeBase64(f)
+        local h, i
+        h, i = vars.pcall(function()
+            return syn and syn.crypt and syn.crypt.base64 and syn.crypt.base64.decode(f)
+        end)
+        if h and i then return i end
+        
+        h, i = vars.pcall(function()
+            return crypt and crypt.base64 and crypt.base64decode(f)
+        end)
+        if h and i then return i end
+        
+        h, i = vars.pcall(function()
+            return bit and bit.base64 and bit.base64decode(f)
+        end)
+        if h and i then return i end
+        
+        if base64_decode then
+            local j, k = vars.pcall(base64_decode, f)
+            if j and k then return k end
+        end
+        
+        h, i = vars.pcall(function()
+            return vars.HttpService:Base64Decode(f)
+        end)
+        if h and i then return i end
+        
+        return f
+    end
+end
+
+_G.ESP_Config = {
+    Box = {
+        Enable = false, --boxes disabled by default
+        Font = "TahomaBold", --fallback for fonts, dont need UI, just keep it
+        Color = vars.Color3(255, 255, 255),
+        Filled = { 
+            Enable = false, --box fill disabled
+            Transparency = 0.5, -- default fill transparency
+            Gradient = {
+                Enable = false, 
+                Color = {Start = vars.Color3(255, 255, 255), End = vars.Color3(0, 0, 255)},
+                Rotating = {Enable = false}, -- rotation toggle per new UI
+                -- backward compatibility fields (read-only):
+                Rotation = {Enable = false, Auto = false},
+                Transparency = 0.9
+            }
+        }
+    },
+    Text = {
+        Spacing = 12,
+        Name = {
+            Enable = false,
+            Side = "Top",
+            Teamcheck = true,
+            Font = "TahomaBold",
+            Size = 13,
+            Color = vars.Color3(255, 255, 255),
+            StrokeTransparency = 0.0,
+            StrokeColor = vars.Color3(0, 0, 0)
+        },
+        Studs = {
+            Enable = false,
+            Side = "Bot",
+            Font = "TahomaBold",
+            Size = 12,
+            Color = vars.Color3(255, 255, 255),
+            StrokeTransparency = 0.0,
+            StrokeColor = vars.Color3(0, 0, 0)
+        },
+        Tool = {
+            Enable = false,
+            Side = "Bot",
+            Font = "TahomaBold",
+            Size = 13,
+            Color = vars.Color3(255, 255, 255),
+            StrokeTransparency = 0.3,
+            StrokeColor = vars.Color3(0, 0, 0)
+        },
+        State = {
+            Enable = false,
+            Side = "Bot",
+            Font = "TahomaBold",
+            Size = 12,
+            Color = vars.Color3(255, 255, 255),
+            StrokeTransparency = 0.0,
+            StrokeColor = vars.Color3(0, 0, 0)
+        }
+    },
+    Bars = {
+        Enable = false,
+        Health = {
+            ShowOutline = false,
+            Enable = false,
+            Lerp = true,
+            Side = "Right",
+            Offset = 4,
+            Pad = 0,
+            Width = 3,
+            Color1 = vars.Color3(0, 255, 0),
+            Color2 = vars.Color3(0, 255, 0),
+            Color3 = vars.Color3(0, 255, 0)
+        },
+        Armor = {
+            ShowOutline = false,
+            Enable = false,
+            Lerp = true,
+            Side = "Bot",
+            Offset = 4,
+            Pad = 0,
+            Width = 3,
+            Color1 = vars.Color3(0, 89, 255),
+            Color2 = vars.Color3(60, 97, 219),
+            Color3 = vars.Color3(81, 84, 255)
+        }
+    },
+    TeamSettings = {
+        friendly = {
+            enabled = false,
+            box = false,
+            boxColor = { Color3.new(0,1,0), 1 }
+        },
+        enemy = {
+            enabled = false,
+            box = false,
+            boxColor = { Color3.new(1,0,0), 1 }
+        }
+    }
+}
+
+-- Константы для вершин
+
+local VERTICES = {
+	vars.Vector3(-1, -1, -1),
+	vars.Vector3(-1, 1, -1),
+	vars.Vector3(-1, 1, 1),
+	vars.Vector3(-1, -1, 1),
+	vars.Vector3(1, -1, -1),
+	vars.Vector3(1, 1, -1),
+	vars.Vector3(1, 1, 1),
+	vars.Vector3(1, -1, 1)
+}
+
+-- Framework библиотека
+local framework = {connections = {}}
+
+-- Fonts модуль
+local Fonts = {}
+
+do -- Fonts functions
+    local function decode_base64(f)
+        local h, i
+        h, i = vars.pcall(
+            function()
+                return syn and syn.crypt and syn.crypt.base64 and syn.crypt.base64.decode(f)
+            end
+        )
+        if h and i then
+            return i
+        end
+        h, i = vars.pcall(
+            function()
+                return crypt and crypt.base64 and crypt.base64decode(f)
+            end
+        )
+        if h and i then
+            return i
+        end
+        h, i = vars.pcall(
+            function()
+                return bit and bit.base64 and bit.base64decode(f)
+            end
+        )
+        if h and i then
+            return i
+        end
+        if base64_decode then
+            local j, k = vars.pcall(base64_decode, f)
+            if j and k then
+                return k
+            end
+        end
+        h, i = vars.pcall(
+            function()
+                return vars.HttpService:Base64Decode(f)
+            end
+        )
+        if h and i then
+            return i
+        end
+        return f
+    end
+end
+
+local default_font_tuning = {
+    ProggyClean = {size = 13, stroke_t = 0.0, stroke_c = Color3.fromRGB(0, 0, 0)},
+    ProggyTiny = {size = 12, stroke_t = 0.0, stroke_c = Color3.fromRGB(0, 0, 0)},
+    Minecraftia = {size = 16, stroke_t = 0.2, stroke_c = Color3.fromRGB(0, 0, 0)},
+    SmallestPixel7 = {size = 12, stroke_t = 0.0, stroke_c = Color3.fromRGB(0, 0, 0)},
+    Verdana = {size = 13, stroke_t = 0.3, stroke_c = Color3.fromRGB(0, 0, 0)},
+    VerdanaBold = {size = 13, stroke_t = 0.4, stroke_c = Color3.fromRGB(0, 0, 0)},
+    Tahoma = {size = 13, stroke_t = 0.3, stroke_c = Color3.fromRGB(0, 0, 0)},
+    TahomaBold = {size = 13, stroke_t = 0.4, stroke_c = Color3.fromRGB(0, 0, 0)},
+    CSGO = {size = 16, stroke_t = 0.2, stroke_c = Color3.fromRGB(0, 0, 0)},
+    WindowsXPTahoma = {size = 13, stroke_t = 0.3, stroke_c = Color3.fromRGB(0, 0, 0)},
+    Stratum2 = {size = 14, stroke_t = 0.2, stroke_c = Color3.fromRGB(0, 0, 0)},
+    Visitor = {size = 14, stroke_t = 0.0, stroke_c = Color3.fromRGB(0, 0, 0)}
+}
+
+function Fonts.get_font_tuning(font_name)
+    local config_font_tuning = _G.ESP_Config and _G.ESP_Config.FontTuning
+    local tuning = default_font_tuning[font_name] or {size = 12, stroke_t = 0.0, stroke_c = vars.Color3(0, 0, 0)}
+
+    if config_font_tuning and type(config_font_tuning) == "table" then
+        local custom_tuning = config_font_tuning[font_name]
+        if custom_tuning then
+            tuning.size = custom_tuning.size or tuning.size
+            tuning.stroke_t = custom_tuning.stroke_t ~= nil and custom_tuning.stroke_t or tuning.stroke_t
+            tuning.stroke_c = custom_tuning.stroke_c or tuning.stroke_c
+        end
+    end
+    return tuning
+end
+
+local font_sources = {
+    {
+        "ProggyClean.ttf",
+        "ProggyClean.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/ProggyClean.txt"
+    },
+    {
+        "ProggyTiny.ttf",
+        "ProggyTiny.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/ProggyTiny.txt"
+    },
+    {
+        "Minecraftia.ttf",
+        "Minecraftia.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Minecraftia.txt"
+    },
+    {
+        "SmallestPixel7.ttf",
+        "SmallestPixel7.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/SmallestPixel7.txt"
+    },
+    {
+        "Verdana.ttf",
+        "Verdana.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Verdana.txt"
+    },
+    {
+        "VerdanaBold.ttf",
+        "VerdanaBold.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/VerdanaBold.txt"
+    },
+    {
+        "Tahoma.ttf",
+        "Tahoma.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Tahoma.txt"
+    },
+    {
+        "TahomaBold.ttf",
+        "TahomaBold.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/TahomaBold.txt"
+    },
+    {
+        "CSGO.ttf",
+        "CSGO.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/CSGO.txt"
+    },
+    {
+        "WindowsXPTahoma.ttf",
+        "WindowsXPTahoma.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/WindowsXPTahoma.txt"
+    },
+    {
+        "Stratum2.ttf",
+        "Stratum2.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Stratum2.txt"
+    },
+    {
+        "Visitor.ttf",
+        "Visitor.json",
+        "https://raw.githubusercontent.com/suspendthread/uwu/refs/heads/main/dependencies/assets/fonts/Visitor.txt"
+    }
+}
+
+local loaded_fonts = {}
+
+function Fonts.load_all_fonts()
+    for l, m in vars.pairs(font_sources) do
+        local n, p, q = m[1], m[2], m[3]
+        if not isfile(n) then
+            local r = vars.HttpService:HttpGet(q)
+            writefile(n, decode_base64(r))
+        end
+        if not isfile(p) then
+            local s = n:match("([^%.]+)")
+            local t = {name = s, faces = {{name = "Regular", weight = 200, style = "normal", assetId = getcustomasset(n)}}}
+            writefile(p, vars.HttpService:JSONEncode(t))
+        end
+    end
+
+    for l, m in vars.pairs(font_sources) do
+        local s = m[1]:match("([^%.]+)")
+        loaded_fonts[s] = Font.new(getcustomasset(m[2]), vars.Enum.FontWeight.Regular)
+    end
+end
+
+function Fonts.get_font(font_name)
+    return loaded_fonts[font_name] or loaded_fonts["ProggyClean"]
+end
+
+function Fonts.get_text_style(text_type)
+    local config_text = _G.ESP_Config and _G.ESP_Config.Text and _G.ESP_Config.Text[text_type] or {}
+    local default_font_name = _G.ESP_Config and _G.ESP_Config.Box and _G.ESP_Config.Box.Font or "ProggyClean"
+    local font_name = config_text.Font or default_font_name
+    local tuning = Fonts.get_font_tuning(font_name)
+
+    return {
+        fontName = font_name,
+        size = config_text.Size or tuning.size,
+        stroke_t = config_text.StrokeTransparency ~= nil and config_text.StrokeTransparency or tuning.stroke_t,
+        stroke_c = config_text.StrokeColor or tuning.stroke_c,
+        text_c = config_text.Color or vars.Color3(255, 255, 255)
+    }
+end
+
+local Rendering = {}
+
+local F = vars.GuiService:GetGuiInset()
+I = {} -- Make global for cleanup access
+J = {last_update = 0, update_interval = 0.05, data = {}} -- Make global for cleanup access
+
+function Rendering.make_text(parent, text_type)
+    local R = vars.Instance("TextLabel")
+    R.Parent = parent
+    R.Size = vars.UDim2(0, 4, 0, 4)
+    R.BackgroundTransparency = 1
+    R.TextScaled = false
+    local U = Fonts.get_text_style(text_type)
+    R.TextColor3 = U.text_c
+    R.TextStrokeColor3 = U.stroke_c
+    R.TextStrokeTransparency = U.stroke_t
+    R.TextSize = U.size
+    R.FontFace = Fonts.get_font(U.fontName)
+    return R
+end
+
+function Rendering.render(player)
+    if not player then
+        return
+    end
+    I[player] = I[player] or {}
+    I[player].Box = {}
+    I[player].Bars = {}
+    I[player].Text = {}
+    I[player].Box.Full = {
+        Square = vars.Drawing("Square"),
+        Inline = vars.Drawing("Square"),
+        Outline = vars.Drawing("Square"),
+        Filled = vars.Instance("Frame", vars.Instance("ScreenGui", vars.CoreGui))
+    }
+    local W = vars.Instance("ScreenGui")
+    W.Parent = vars.CoreGui
+    local X = vars.Instance("ScreenGui")
+    X.Parent = vars.CoreGui
+    local Y = vars.Instance("ScreenGui")
+    Y.Parent = vars.CoreGui
+    I[player].Text.Studs = Rendering.make_text(W, "Studs")
+    I[player].Text.Tool = Rendering.make_text(Y, "Tool")
+    I[player].Text.Name = Rendering.make_text(X, "Name")
+    local Z = vars.Instance("ScreenGui")
+    Z.Parent = vars.CoreGui
+    I[player].Text.State = Rendering.make_text(Z, "State")
+    local _ = vars.Instance("ScreenGui")
+    _.Name = player.Name .. "_ArmorBar"
+    _.ZIndexBehavior = vars.Enum.ZIndexBehavior.Sibling
+    _.Parent = vars.CoreGui
+    local a0 = vars.Instance("Frame")
+    a0.BackgroundColor3 = Color3.new(0, 0, 0)
+    a0.BorderSizePixel = 0
+    a0.Name = "Outline"
+    a0.Parent = _
+    local a1 = vars.Instance("Frame")
+    a1.BackgroundTransparency = 0
+    a1.BorderSizePixel = 0
+    a1.Name = "Fill"
+    a1.Parent = a0
+    local a2 = vars.Instance("UIGradient", a1)
+    a2.Color =
+        vars.ColorSequence.new(
+        {vars.ColorSequenceKeypoint.new(0, _G.ESP_Config.Bars.Armor.Color1), vars.ColorSequenceKeypoint.new(1, _G.ESP_Config.Bars.Armor.Color2)}
+    )
+    a2.Rotation = 90
+    I[player].Bars.Armor = {Gui = _, Outline = a0, Frame = a1, Gradient = a2}
+    local a3 = vars.Instance("ScreenGui")
+    a3.Name = player.Name .. "_HealthBar"
+    a3.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    a3.Parent = vars.CoreGui
+    local a4 = vars.Instance("Frame")
+    a4.BackgroundColor3 = Color3.new(0, 0, 0)
+    a4.BorderSizePixel = 0
+    a4.Name = "Outline"
+    a4.Parent = a3
+    local a5 = vars.Instance("Frame")
+    a5.BackgroundTransparency = 0
+    a5.BorderSizePixel = 0
+    a5.Name = "Fill"
+    a5.Parent = a4
+    local a6 = vars.Instance("UIGradient", a5)
+    a6.Color =
+        vars.ColorSequence.new(
+        {
+            vars.ColorSequenceKeypoint.new(0, _G.ESP_Config.Bars.Health.Color1),
+            vars.ColorSequenceKeypoint.new(1, _G.ESP_Config.Bars.Health.Color2)
+        }
+    )
+    a6.Rotation = 90
+    I[player].Bars.Health = {Gui = a3, Outline = a4, Frame = a5, Gradient = a6}
+end
+
+function Rendering.clear_esp(player)
+    if not I[player] then
+        return
+    end
+    if I[player].Box and I[player].Box.Full then
+        I[player].Box.Full.Square.Visible = false
+        I[player].Box.Full.Outline.Visible = false
+        I[player].Box.Full.Inline.Visible = false
+        if I[player].Box.Full.Filled then
+            I[player].Box.Full.Filled.Visible = false
+        end
+    end
+    if I[player].Text then
+        if I[player].Text.Studs then
+            I[player].Text.Studs.Visible = false
+        end
+        if I[player].Text.Tool then
+            I[player].Text.Tool.Visible = false
+        end
+        if I[player].Text.Name then
+            I[player].Text.Name.Visible = false
+        end
+        if I[player].Text.State then
+            I[player].Text.State.Visible = false
+        end
+    end
+    if I[player].Bars then
+        if I[player].Bars.Health then
+            if I[player].Bars.Health.Frame then I[player].Bars.Health.Frame.Visible = false end
+            if I[player].Bars.Health.Outline then I[player].Bars.Health.Outline.Visible = false end
+            if I[player].Bars.Health.Gui then I[player].Bars.Health.Gui.Enabled = false end
+        end
+        if I[player].Bars.Armor then
+            if I[player].Bars.Armor.Frame then I[player].Bars.Armor.Frame.Visible = false end
+            if I[player].Bars.Armor.Outline then I[player].Bars.Armor.Outline.Visible = false end
+            if I[player].Bars.Armor.Gui then I[player].Bars.Armor.Gui.Enabled = false end
+        end
+    end
+end
+
+function Rendering.update(player)
+    if not player or not I[player] then
+        return
+    end
+
+    local a7 = player.Character
+    local a8 = vars.LocalPlayer.Character
+    local a9 = vars.Camera
+    if not a7 or not a8 then
+        return
+    end
+    local aa = a7:FindFirstChild("HumanoidRootPart")
+    local ab = a7:FindFirstChildWhichIsA("Humanoid")
+    if not aa or not ab then
+        Rendering.clear_esp(player)
+        return
+    end
+    local ac = a9:WorldToViewportPoint(aa.Position)
+    local ad =
+        (a9:WorldToViewportPoint(aa.Position - vars.Vector3(0, 1, 0)).Y -
+        a9:WorldToViewportPoint(aa.Position + vars.Vector3(0, 3, 0)).Y) /
+        2
+    local ae = vars.Vector2(math.floor(ad * 1.5), math.floor(ad * 3.2))
+    local af = vars.Vector2(math.floor(ac.X - ad * 1.5 / 2), math.floor(ac.Y - ad * 3 / 2))
+    local ag = I[player]
+    local a0, ah = a9:WorldToViewportPoint(aa.Position)
+    if not ah then
+        Rendering.clear_esp(player)
+        return
+    end
+    -- ensure boxes are hidden when disabled to avoid lingering drawings
+    if not _G.ESP_Config.Box.Enable then
+        local ai_off = ag.Box and ag.Box.Full
+        if ai_off then
+            local sq, ol, inl, fill = ai_off.Square, ai_off.Outline, ai_off.Inline, ai_off.Filled
+            if sq then sq.Visible = false end
+            if ol then ol.Visible = false end
+            if inl then inl.Visible = false end
+            if fill then fill.Visible = false end
+        end
+    end
+    if _G.ESP_Config.Box.Enable then
+        local ai = ag.Box.Full
+        local aj, ak, al, am = ai.Square, ai.Outline, ai.Inline, ai.Filled
+        aj.Visible = _G.ESP_Config.Box.Enable
+        aj.Position = af
+        aj.Size = ae
+        aj.Color = _G.ESP_Config.Box.Color
+        aj.Thickness = 2
+        aj.Filled = false
+        aj.ZIndex = 9e9
+        ak.Visible = _G.ESP_Config.Box.Enable
+        ak.Position = af - vars.Vector2(1, 1)
+        ak.Size = ae + vars.Vector2(2, 2)
+        ak.Color = Color3.new(0, 0, 0)
+        ak.Thickness = 1
+        ak.Filled = false
+        al.Visible = true
+        al.Position = af + vars.Vector2(1, 1)
+        al.Size = ae - vars.Vector2(2, 2)
+        al.Color = Color3.new(0, 0, 0)
+        al.Thickness = 1
+        al.Filled = false
+        if _G.ESP_Config.Box.Filled.Enable and am then
+            am.Position = vars.UDim2(0, af.X, 0, af.Y - F.Y)
+            am.Size = vars.UDim2(0, ae.X, 0, ae.Y)
+            am.BackgroundTransparency = (_G.ESP_Config.Box.Filled.Transparency)
+                or (_G.ESP_Config.Box.Filled.Gradient and _G.ESP_Config.Box.Filled.Gradient.Transparency)
+                or 0.5
+            am.BackgroundColor3 = vars.Color3(255, 255, 255)
+            am.Visible = _G.ESP_Config.Box.Filled.Enable
+            am.ZIndex = -9e9
+            if _G.ESP_Config.Box.Filled.Gradient.Enable then
+                local an = am:FindFirstChild("Gradient") or vars.Instance("UIGradient")
+                an.Name = "Gradient"
+                an.Color =
+                    vars.ColorSequence.new(
+                    {
+                        vars.ColorSequenceKeypoint.new(0, _G.ESP_Config.Box.Filled.Gradient.Color.Start),
+                        vars.ColorSequenceKeypoint.new(1, _G.ESP_Config.Box.Filled.Gradient.Color.End)
+                    }
+                )
+                local rotating = (_G.ESP_Config.Box.Filled.Gradient.Rotating and _G.ESP_Config.Box.Filled.Gradient.Rotating.Enable)
+                    or (_G.ESP_Config.Box.Filled.Gradient.Rotation and _G.ESP_Config.Box.Filled.Gradient.Rotation.Enable)
+                if rotating then
+                    an.Rotation = vars.sin(vars.tick() * 2) * 180
+                else
+                    an.Rotation = 0
+                end
+                if not an.Parent then
+                    an.Parent = am
+                end
+            else
+                local existing = am:FindFirstChild("Gradient")
+                if existing then existing:Destroy() end
+            end
+        elseif am then
+            am.Visible = false
+        end
+    end
+    local ao = ae.Y
+    local ap = 3
+    local aq = af.X
+    local ar = af.Y - F.Y
+    -- master bars disable: hide both when Bars.Enable is false/missing
+    local bars_master_enabled = _G.ESP_Config and _G.ESP_Config.Bars and (_G.ESP_Config.Bars.Enable ~= false)
+    if not bars_master_enabled then
+        if ag.Bars then
+            if ag.Bars.Health then
+                local hOut = ag.Bars.Health.Outline
+                local hFrm = ag.Bars.Health.Frame
+                local gui = ag.Bars.Health.Gui
+                if hOut then hOut.Visible = false end
+                if hFrm then hFrm.Visible = false end
+                if gui then gui.Enabled = false end
+            end
+            if ag.Bars.Armor then
+                local aOut = ag.Bars.Armor.Outline
+                local aFrm = ag.Bars.Armor.Frame
+                local gui = ag.Bars.Armor.Gui
+                if aOut then aOut.Visible = false end
+                if aFrm then aFrm.Visible = false end
+                if gui then gui.Enabled = false end
+            end
+        end
+    end
+
+    -- health bar: update or hide when disabled
+    if _G.ESP_Config.Bars.Health.Enable and ab then
+        local as = vars.clamp(ab.Health / 100, 0, 1)
+        local at = ag.Bars.Health.LastHealth or as
+        local au = at + (as - at) * 0.05
+        ag.Bars.Health.LastHealth = au
+        local av = _G.ESP_Config.Bars.Health
+        local aw = av.Side or "Left"
+        local ax = av.Offset or 4
+        local ay = av.Pad or 0
+        local az = av.Width or ap
+        local aA = af.X + ae.X
+        local ak = ag.Bars.Health.Outline
+        local aB = ag.Bars.Health.Frame
+        local aC = ag.Bars.Health.Gradient
+        if ak and aB then
+            -- ensure ScreenGui is enabled when rendering
+            local gui = ag.Bars.Health.Gui
+            if gui then gui.Enabled = true end
+            local aD = aw == "Left" or aw == "Right"
+            if aC then
+                -- update gradient colors from current config every frame
+                local c1 = (_G.ESP_Config and _G.ESP_Config.Bars and _G.ESP_Config.Bars.Health and _G.ESP_Config.Bars.Health.Color1) or _G.ESP_Config.Bars.Health.Color1
+                local c2 = (_G.ESP_Config and _G.ESP_Config.Bars and _G.ESP_Config.Bars.Health and _G.ESP_Config.Bars.Health.Color2) or _G.ESP_Config.Bars.Health.Color2
+                aC.Color = vars.ColorSequence.new({
+                    vars.ColorSequenceKeypoint.new(0, c1),
+                    vars.ColorSequenceKeypoint.new(1, c2)
+                })
+                aC.Rotation = aD and 90 or 0
+            end
+            if aD then
+                local aE = math.max(0, ao - 2 * ay)
+                local aF = 0
+                local aG = _G.ESP_Config.Bars.Armor
+                if aG and aG.Enable and aG.Side == aw then
+                    local aH = aG.Width or ap
+                    local aI = 2
+                    local aJ = ax <= (aG.Offset or 4)
+                    if not aJ then
+                        aF = aH + aI
+                    end
+                end
+                local aK = aw == "Left" and aq - ax - az - aF or aA + ax + aF
+                ak.Visible = true
+                ak.Position = vars.UDim2(0, aK - 1, 0, ar - 1 + ay)
+                ak.Size = vars.UDim2(0, az + 2, 0, math.floor(aE + 2))
+                ak.BackgroundTransparency = 0.2
+                aB.Visible = true
+                aB.Position = vars.UDim2(0, 1, 0, (1 - au) * aE + 1)
+                aB.Size = vars.UDim2(0, az, 0, au * aE)
+            else
+                local aL = math.max(0, ae.X - 2 * ay)
+                local aF = 0
+                local aG = _G.ESP_Config.Bars.Armor
+                if aG and aG.Enable and aG.Side == aw then
+                    local aH = aG.Width or ap
+                    local aJ = ax <= (aG.Offset or 4)
+                    if not aJ then
+                        local aM = _G.ESP_Config.Bars.Spacing or 2
+                        local aN = 2
+                        aF = aH + aM + aN
+                    end
+                end
+                local aO = aw == "Top" and ar - ax - az - aF or ar + ae.Y + ax + aF
+                -- update gradient colors from current config every frame (horizontal bar)
+                if aC then
+                    local c1 = (_G.ESP_Config and _G.ESP_Config.Bars and _G.ESP_Config.Bars.Health and _G.ESP_Config.Bars.Health.Color1) or _G.ESP_Config.Bars.Health.Color1
+                    local c2 = (_G.ESP_Config and _G.ESP_Config.Bars and _G.ESP_Config.Bars.Health and _G.ESP_Config.Bars.Health.Color2) or _G.ESP_Config.Bars.Health.Color2
+                    aC.Color = vars.ColorSequence.new({
+                        vars.ColorSequenceKeypoint.new(0, c1),
+                        vars.ColorSequenceKeypoint.new(1, c2)
+                    })
+                    aC.Rotation = 0
+                end
+                ak.Visible = true
+                ak.Position = vars.UDim2(0, af.X + ay - 1, 0, aO - 1)
+                ak.Size = vars.UDim2(0, math.floor(aL + 2), 0, az + 2)
+                ak.BackgroundTransparency = 0.2
+                aB.Visible = true
+                aB.Position = vars.UDim2(0, 1, 0, 1)
+                aB.Size = vars.UDim2(0, au * aL, 0, az)
+            end
+        end
+    else
+        -- immediately hide when disabled or humanoid missing
+        if ag.Bars and ag.Bars.Health then
+            local hOut = ag.Bars.Health.Outline
+            local hFrm = ag.Bars.Health.Frame
+            local gui = ag.Bars.Health.Gui
+            if hOut then hOut.Visible = false end
+            if hFrm then hFrm.Visible = false end
+            if gui then gui.Enabled = false end
+        end
+    end
+    -- armor bar: hide when disabled (render when enabled occurs later in flow)
+    if not (_G.ESP_Config.Bars.Armor and _G.ESP_Config.Bars.Armor.Enable) then
+        if ag.Bars and ag.Bars.Armor then
+            local ok = ag.Bars.Armor.Outline
+            local fr = ag.Bars.Armor.Frame
+            if ok then ok.Visible = false end
+            if fr then fr.Visible = false end
+        end
+    end
+
+    local aP = ag.Text.Name
+    local aQ = ag.Text.Tool
+    local aR = ag.Text.Studs
+    local aS = 20
+    local aT = af.X + ae.X / 2
+    local aU = af.Y - F.Y
+    local av = _G.ESP_Config.Bars.Health
+    local aG = _G.ESP_Config.Bars.Armor
+    local aV, aW = 0, 0
+    local function aX(aY, aZ)
+        return (aY or 4) + (aZ or 3)
+    end
+    local function a_(b0, b1, b2)
+        return (b0 or 3) + (b1 or 4) + (b2 or 3)
+    end
+    local b3 = _G.ESP_Config.Bars.Health
+    local b4 = _G.ESP_Config.Bars.Armor
+    if b3 and b3.Enable and b3.Side == "Top" and (b4 and b4.Enable and b4.Side == "Top") then
+        local b5 = (b3.Offset or 4) <= (b4.Offset or 4)
+        if b5 then
+            aV = a_(b3.Width, b4.Offset, b4.Width)
+        else
+            aV = a_(b4.Width, b3.Offset, b3.Width)
+        end
+        local b6 = _G.ESP_Config.Text and (_G.ESP_Config.Text.TopGap or _G.ESP_Config.Text.BottomGap) or 6
+        aV = aV + b6
+    else
+        if b3 and b3.Enable and b3.Side == "Top" then
+            aV = math.max(aV, aX(b3.Offset, b3.Width))
+        end
+        if b4 and b4.Enable and b4.Side == "Top" then
+            aV = math.max(aV, aX(b4.Offset, b4.Width))
+        end
+    end
+    if b3 and b3.Enable and b3.Side == "Bot" and (b4 and b4.Enable and b4.Side == "Bot") then
+        local b5 = (b3.Offset or 4) <= (b4.Offset or 4)
+        if b5 then
+            aW = a_(b3.Width, b4.Offset, b4.Width)
+        else
+            aW = a_(b4.Width, b3.Offset, b3.Width)
+        end
+        local b7 = _G.ESP_Config.Text and _G.ESP_Config.Text.BottomGap or 6
+        aW = aW + b7
+    else
+        if b3 and b3.Enable and b3.Side == "Bot" then
+            aW = math.max(aW, aX(b3.Offset, b3.Width))
+        end
+        if b4 and b4.Enable and b4.Side == "Bot" then
+            aW = math.max(aW, aX(b4.Offset, b4.Width))
+        end
+    end
+    local b8 = Fonts.get_text_style("Name")
+    local b9 = Fonts.get_text_style("Tool")
+    local ba = Fonts.get_text_style("Studs")
+    local bb = Fonts.get_text_style("State")
+    do
+        local S = _G.ESP_Config.Text or {}
+        local bc = S.Spacing or 10
+        local bd = S.FirstTopGap or 14
+        local be = S.FirstBotGap or 5
+        local bf = ag.Text.State
+        local bg = {
+            {
+                key = "Name",
+                label = aP,
+                tune = b8,
+                enable = S.Name and S.Name.Enable,
+                side = S.Name and S.Name.Side or "Top"
+            },
+            {
+                key = "Tool",
+                label = aQ,
+                tune = b9,
+                enable = S.Tool and S.Tool.Enable,
+                side = S.Tool and S.Tool.Side or "Bot"
+            },
+            {
+                key = "Studs",
+                label = aR,
+                tune = ba,
+                enable = S.Studs and S.Studs.Enable,
+                side = S.Studs and S.Studs.Side or "Bot"
+            },
+            {
+                key = "State",
+                label = bf,
+                tune = bb,
+                enable = S.State and S.State.Enable,
+                side = S.State and S.State.Side or "Bot"
+            }
+        }
+        local bh = {Name = 1, Studs = 2, Tool = 3, State = 4}
+        local bi = {Name = 1, Tool = 2, Studs = 3, State = 4}
+        local bj = aU - aV
+        local bk = aU + ae.Y + aW
+        local bl = vars.tick()
+        local bm = tostring(player.UserId)
+        local bn = J.data[bm]
+        if not bn or bl - J.last_update >= J.update_interval then
+            local bo = a7:FindFirstChildOfClass("Tool")
+            local bp = (a9.CFrame.Position - aa.Position).Magnitude
+            local bq = bp * 0.28
+            local br = (ab.MoveDirection and ab.MoveDirection.Magnitude or 0) > 0.1
+            local bs = br and "Moving" or "idle"
+            J.data[bm] = {tool = bo and bo.Name or "none", studs = string.format("[%.0fm]", bq), state = bs}
+            if not bn then
+                J.last_update = bl
+            end
+        end
+        bn = J.data[bm] or {tool = "none", studs = "[0m]", state = "idle"}
+        local function bt(bu, bv, bw)
+            local bx = bu == "Top" and bv - bw or bv + bw
+            table.sort(
+                bg,
+                function(by, n)
+                    if by.side ~= bu then
+                        return false
+                    end
+                    if n.side ~= bu then
+                        return true
+                    end
+                    local bz = bu == "Top" and (bh[by.key] or 99) or (bi[by.key] or 99)
+                    local bA = bu == "Top" and (bh[n.key] or 99) or (bi[n.key] or 99)
+                    return bz < bA
+                end
+            )
+            for a0, bB in vars.ipairs(bg) do
+                if bB.side == bu then
+                    local bC = bB.label
+                    if bB.enable then
+                        bC.Visible = true
+                        bC.FontFace = Fonts.get_font(bB.tune.fontName) or bC.FontFace
+                        bC.TextSize = bB.tune.size
+                        bC.TextColor3 = bB.tune.text_c
+                        bC.TextStrokeColor3 = bB.tune.stroke_c
+                        bC.TextStrokeTransparency = bB.tune.stroke_t
+                        if bB.key == "Name" then
+                            bC.Text = player.Name
+                        elseif bB.key == "Tool" then
+                            bC.Text = bn.tool
+                        elseif bB.key == "Studs" then
+                            bC.Text = bn.studs
+                        elseif bB.key == "State" then
+                            bC.Text = bn.state
+                        end
+                        local bD = bu == "Top" and math.floor(bx) or math.floor(bx)
+                        bC.Position = vars.UDim2(0, math.floor(aT - bC.AbsoluteSize.X / 2), 0, bD)
+                        bx = bu == "Top" and bx - bc or bx + bc
+                    else
+                        bC.Visible = false
+                    end
+                end
+            end
+        end
+        bt("Top", bj, bd)
+        bt("Bot", bk, be)
+        if not (S.Name and S.Name.Enable) and aP then
+            aP.Visible = false
+        end
+        if not (S.Tool and S.Tool.Enable) and aQ then
+            aQ.Visible = false
+        end
+        if not (S.Studs and S.Studs.Enable) and aR then
+            aR.Visible = false
+        end
+        if not (S.State and S.State.Enable) and bf then
+            bf.Visible = false
+        end
+    end
+    if _G.ESP_Config.Bars.Armor.Enable and a7 then
+        local bE = a7:FindFirstChild("BodyEffects")
+        local bF = bE and bE:FindFirstChild("Armor")
+        local bG = bF and math.clamp(bF.Value / 200, 0, 1) or 0
+        local bH = ag.Bars.Armor.LastArmor or bG
+        local bI = bH + (bG - bH) * 0.05
+        ag.Bars.Armor.LastArmor = bI
+        local b3 = _G.ESP_Config.Bars.Health
+        local b4 = _G.ESP_Config.Bars.Armor
+        local bJ = av.Side or "Left"
+        local bK = aG.Side or "Left"
+        local bL = aG.Offset or 4
+        local bM = aG.Pad or 0
+        local bN = aG.Width or ap
+        local bO = av.Offset or 4
+        local bP = av.Width or ap
+        local aA = af.X + ae.X
+        local ak = ag.Bars.Armor.Outline
+        local aB = ag.Bars.Armor.Frame
+        local aC = ag.Bars.Armor.Gradient
+        local guiArmor = ag.Bars.Armor.Gui
+        local aI = 2
+        if ak and aB then
+            if guiArmor then guiArmor.Enabled = true end
+            local aD = bK == "Left" or bK == "Right"
+            if aC then
+                -- update armor gradient colors from current config each frame
+                local c1 = (_G.ESP_Config and _G.ESP_Config.Bars and _G.ESP_Config.Bars.Armor and _G.ESP_Config.Bars.Armor.Color1) or _G.ESP_Config.Bars.Armor.Color1
+                local c2 = (_G.ESP_Config and _G.ESP_Config.Bars and _G.ESP_Config.Bars.Armor and _G.ESP_Config.Bars.Armor.Color2) or _G.ESP_Config.Bars.Armor.Color2
+                aC.Color = vars.ColorSequence.new({
+                    vars.ColorSequenceKeypoint.new(0, c1),
+                    vars.ColorSequenceKeypoint.new(1, c2)
+                })
+                aC.Rotation = aD and 90 or 0
+            end
+            if aD then
+                local aE = math.max(0, ao - 2 * bM)
+                local aF = 0
+                if _G.ESP_Config.Bars.Health.Enable and bJ == bK then
+                    local aJ = bO <= bL
+                    if aJ then
+                        aF = bP + aI
+                    else
+                        aF = 0
+                    end
+                end
+                local aK
+                if bK == "Left" then
+                    aK = aq - bL - bN - aF
+                else
+                    aK = aA + bL + aF
+                end
+                ak.Visible = true
+                ak.Position = vars.UDim2(0, aK - 1, 0, ar - 1 + bM)
+                ak.Size = vars.UDim2(0, bN + 2, 0, math.floor(aE + 2))
+                ak.BackgroundTransparency = 0.2
+                aB.Visible = true
+                aB.Position = vars.UDim2(0, 1, 0, (1 - bI) * aE + 1)
+                aB.Size = vars.UDim2(0, bN, 0, bI * aE)
+            else
+                local aL = math.max(0, ae.X - 2 * bM)
+                local aF = 0
+                if _G.ESP_Config.Bars.Health.Enable and bJ == bK then
+                    local aJ = bO <= bL
+                    if aJ then
+                        local aM = _G.ESP_Config.Bars.Spacing or 2
+                        local aN = 2
+                        aF = (av.Width or ap) + aM + aN
+                    else
+                        aF = 0
+                    end
+                end
+                local aO
+                if bK == "Top" then
+                    aO = ar - bL - bN - aF
+                else
+                    aO = ar + ae.Y + bL + aF
+                end
+                -- update armor gradient for horizontal bar
+                if aC then
+                    local c1 = (_G.ESP_Config and _G.ESP_Config.Bars and _G.ESP_Config.Bars.Armor and _G.ESP_Config.Bars.Armor.Color1) or _G.ESP_Config.Bars.Armor.Color1
+                    local c2 = (_G.ESP_Config and _G.ESP_Config.Bars and _G.ESP_Config.Bars.Armor and _G.ESP_Config.Bars.Armor.Color2) or _G.ESP_Config.Bars.Armor.Color2
+                    aC.Color = vars.ColorSequence.new({
+                        vars.ColorSequenceKeypoint.new(0, c1),
+                        vars.ColorSequenceKeypoint.new(1, c2)
+                    })
+                    aC.Rotation = 0
+                end
+                ak.Visible = true
+                ak.Position = vars.UDim2(0, af.X + bM - 1, 0, aO - 1)
+                ak.Size = vars.UDim2(0, math.floor(aL + 2), 0, bN + 2)
+                ak.BackgroundTransparency = 0.2
+                aB.Visible = true
+                aB.Position = vars.UDim2(0, 1, 0, 1)
+                aB.Size = vars.UDim2(0, bI * aL, 0, bN)
+            end
+        end
+    end
+end
+
+function Rendering.cleanup_player_esp(player)
+    local player_data = I[player]
+    if player_data then
+        if player_data.Box and player_data.Box.Full then
+            local Q = player_data.Box.Full
+            for l, R in Utils.ipairs({Q.Square, Q.Inline, Q.Outline}) do
+                if R and R.Remove then
+                    Utils.pcall(function() R:Remove() end)
+                end
+            end
+            if Q.Filled then
+                Utils.pcall(function()
+                    local S = Q.Filled.Parent
+                    if S and S.Destroy then
+                        S:Destroy()
+                    else
+                        Q.Filled:Destroy()
+                    end
+                end)
+            end
+        end
+        if player_data.Text then
+            for l, O in Utils.pairs(player_data.Text) do
+                if O and O.Parent then
+                    Utils.pcall(function()
+                        local P = O.Parent
+                        if P and P.Destroy then
+                            P:Destroy()
+                        end
+                    end)
+                end
+            end
+        end
+        if player_data.Bars then
+            if player_data.Bars.Health and player_data.Bars.Health.Gui then
+                Utils.pcall(function() player_data.Bars.Health.Gui:Destroy() end)
+            end
+            if player_data.Bars.Armor and player_data.Bars.Armor.Gui then
+                Utils.pcall(function() player_data.Bars.Armor.Gui:Destroy() end)
+            end
+        end
+        I[player] = nil
+    end
+end
+
+local Core = {}
+
+local H = {main = {}}
+local I_core = {}
+
+if getgenv and getgenv().ESP_CLEANUP then
+    vars.pcall(getgenv().ESP_CLEANUP)
+end
+
+local K = vars.tick and vars.tick() or vars.os.clock()
+if getgenv then getgenv().ESP_SESSION = K end
+
+if getgenv then getgenv().ESP_CLEANUP = function()
+    if H and H.main then
+        for l, L in vars.pairs(H.main) do
+            if L and typeof(L) == "RBXScriptConnection" then
+                vars.pcall(
+                    function()
+                        L:Disconnect()
+                    end
+                )
+            elseif L and L.Disconnect then
+                vars.pcall(
+                    function()
+                        L:Disconnect()
+                    end
+                )
+            end
+        end
+    end
+    if I_core then
+        for M, N in vars.pairs(I_core) do
+            Rendering.cleanup_player_esp(M)
+            I_core[M] = nil
+        end
+    end
+    H.main = {}
+end
+end
+
+
+local function setup_player_esp(player)
+    if not player then return end
+    if player == vars.LocalPlayer then return end
+
+    Rendering.render(player)
+end
+
+local function remove_player_esp(player)
+    if not player then return end
+    Rendering.cleanup_player_esp(player)
+end
+
+function Core.init()
+    for l, V in vars.ipairs(vars.Players:GetPlayers()) do
+        setup_player_esp(V)
+    end
+
+    H.main.PlayerAdded = vars.Players.PlayerAdded:Connect(setup_player_esp)
+    H.main.PlayerRemoving = vars.Players.PlayerRemoving:Connect(remove_player_esp)
+
+    H.main.RenderStepped = vars.RunService.RenderStepped:Connect(function()
+        for l, V in vars.ipairs(vars.Players:GetPlayers()) do
+            if V ~= vars.LocalPlayer then
+                Rendering.update(V)
+            end
+        end
+    end)
+
+    local function humanoid_display_settings(humanoid)
+        if not humanoid then return end
+        if _G.ESP_Config and _G.ESP_Config.Text and _G.ESP_Config.Text.Name and _G.ESP_Config.Text.Name.Enable then
+            humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        else
+            humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+            humanoid.NameOcclusion = Enum.NameOcclusion.NoOcclusion
+        end
+    end
+
+    H.main.NameplatePerPlayer = H.main.NameplatePerPlayer or {}
+    local function setup_humanoid_display(player, character)
+        if not player or player == vars.LocalPlayer or not character then return end
+        local player_id_str = tostring(player.UserId)
+        local connections = H.main.NameplatePerPlayer[player_id_str]
+        if connections then
+            for l, L in Utils.pairs(connections) do
+                Utils.pcall(function() L:Disconnect() end)
+            end
+        end
+        connections = {}
+        H.main.NameplatePerPlayer[player_id_str] = connections
+
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid_display_settings(humanoid)
+        end
+        connections.HumAdded = character.ChildAdded:Connect(function(child)
+            if child:IsA("Humanoid") then
+                humanoid_display_settings(child)
+            end
+        end)
+    end
+
+    H.main.CharacterAdded = vars.Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function(char)
+            setup_humanoid_display(player, char)
+        end)
+    end)
+
+    for _, player in vars.pairs(vars.Players:GetPlayers()) do
+        if player.Character then
+            setup_humanoid_display(player, player.Character)
+        end
+    end
+end
+
+local ESP_Library = {}
+
+function ESP_Library.init()
+    Fonts.load_all_fonts()
+    Core.init()
+end
+
+function ESP_Library.updateConfig(newConfig)
+    for k, v in pairs(newConfig) do
+        _G.ESP_Config[k] = v
+    end
+end
+
+function ESP_Library.cleanup()
+    -- Clear all ESP objects
+    for player, objects in pairs(I) do
+        -- Clear Drawing objects
+        if objects.Box and objects.Box.Full then
+            if objects.Box.Full.Square then
+                objects.Box.Full.Square:Remove()
+            end
+            if objects.Box.Full.Inline then
+                objects.Box.Full.Inline:Remove()
+            end
+            if objects.Box.Full.Outline then
+                objects.Box.Full.Outline:Remove()
+            end
+            if objects.Box.Full.Filled and objects.Box.Full.Filled.Parent then
+                objects.Box.Full.Filled.Parent:Destroy()
+            end
+        end
+        
+        -- Clear Text objects
+        if objects.Text then
+            for _, textObj in pairs(objects.Text) do
+                if textObj and textObj.Parent then
+                    textObj.Parent:Destroy()
+                end
+            end
+        end
+        
+        -- Clear Bar objects
+        if objects.Bars then
+            if objects.Bars.Armor and objects.Bars.Armor.Gui then
+                objects.Bars.Armor.Gui:Destroy()
+            end
+            if objects.Bars.Health and objects.Bars.Health.Gui then
+                objects.Bars.Health.Gui:Destroy()
+            end
+        end
+    end
+    
+    
+    -- Clear the cache
+    I = {}
+    J.data = {}
+    
+    -- Call original cleanup if exists
+    if getgenv and getgenv().ESP_CLEANUP then
+        if getgenv then getgenv().ESP_CLEANUP() end
+    end
+end
+
+-- Selective cleanup for specific ESP types
+function ESP_Library.cleanup_type(espType)
+    for player, objects in pairs(I) do
+        if espType == "Box" and objects.Box and objects.Box.Full then
+            if objects.Box.Full.Square then
+                objects.Box.Full.Square:Remove()
+            end
+            if objects.Box.Full.Inline then
+                objects.Box.Full.Inline:Remove()
+            end
+            if objects.Box.Full.Outline then
+                objects.Box.Full.Outline:Remove()
+            end
+            if objects.Box.Full.Filled and objects.Box.Full.Filled.Parent then
+                objects.Box.Full.Filled.Parent:Destroy()
+            end
+            objects.Box = nil
+        elseif espType == "Text" and objects.Text then
+            for _, textObj in pairs(objects.Text) do
+                if textObj and textObj.Parent then
+                    textObj.Parent:Destroy()
+                end
+            end
+            objects.Text = nil
+        elseif espType == "Bars" and objects.Bars then
+            if objects.Bars.Armor and objects.Bars.Armor.Gui then
+                objects.Bars.Armor.Gui:Destroy()
+            end
+            if objects.Bars.Health and objects.Bars.Health.Gui then
+                objects.Bars.Health.Gui:Destroy()
+            end
+            objects.Bars = nil
+        end
+    end
+    
+end
+
+_G.ESP_Start = function()
+    if not _G.ESP_Running then
+        _G.ESP_Running = true
+        print("[ESP] Starting ESP...")
+        -- Инициализируем ESP
+        ESP_Library.init()
+        print("[ESP] ESP Started successfully")
+    else
+        print("[ESP] ESP already running")
+    end
+end
+
+_G.ESP_Stop = function()
+    if _G.ESP_Running then
+        _G.ESP_Running = false
+        print("[ESP] Stopping ESP...")
+        -- Очищаем все ESP объекты
+        ESP_Library.cleanup()
+        print("[ESP] ESP Stopped successfully")
+    else
+        print("[ESP] ESP not running")
+    end
+end
+
+return ESP_Library
