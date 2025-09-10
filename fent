@@ -4179,6 +4179,246 @@ do -- Visuals Tab
         -- Инициализация listener для новых объектов
         setupWorkspaceListener()
         
+        -- Bullet Tracers система
+        local bullet_tracers_state = {
+            enabled = false,
+            color1 = z(255, 255, 255),
+            color2 = z(255, 0, 0),
+            thickness = 1.0,
+            style = "fent",
+            texture = "rbxassetid://446111271",
+            texture_mode = "Stretch",
+            container = nil,
+            connections = {}
+        }
+        
+        -- Стили трейсеров
+        local tracer_styles = {
+            fent = {
+                texture = "rbxassetid://446111271",
+                mode = "Stretch"
+            },
+            lightning = {
+                texture = "rbxassetid://14050932611",
+                mode = "Stretch"
+            },
+            chain = {
+                texture = "rbxassetid://12721435220",
+                mode = "Static"
+            },
+            arrow = {
+                texture = "rbxassetid://14051022203",
+                mode = "Static"
+            },
+            ware = {
+                texture = "rbxassetid://11829306338",
+                mode = "Stretch"
+            }
+        }
+        
+        -- Функция создания трассера
+        local function createTracer(startPos, endPos)
+            if not bullet_tracers_state.enabled then 
+                return 
+            end
+            
+            if not bullet_tracers_state.container then
+                bullet_tracers_state.container = Instance.new("Folder", workspace)
+                bullet_tracers_state.container.Name = "TracerContainer"
+            end
+            
+            local colorSequence = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, bullet_tracers_state.color1),
+                ColorSequenceKeypoint.new(1, bullet_tracers_state.color2)
+            })
+            
+            local startPart = Instance.new("Part", bullet_tracers_state.container)
+            startPart.Size = Vector3.new(0, 0, 0)
+            startPart.Massless = true
+            startPart.Transparency = 1
+            startPart.CanCollide = false
+            startPart.Position = startPos
+            startPart.Anchored = true
+            
+            local startAttachment = Instance.new("Attachment", startPart)
+            
+            local impactPart = Instance.new("Part", bullet_tracers_state.container)
+            impactPart.Size = Vector3.new(0, 0, 0)
+            impactPart.Transparency = 1
+            impactPart.CanCollide = false
+            impactPart.Position = endPos
+            impactPart.Anchored = true
+            impactPart.Material = Enum.Material.ForceField
+            impactPart.Massless = true
+            
+            local impactAttachment = Instance.new("Attachment", impactPart)
+            
+            local beam = Instance.new("Beam", startPart)
+            beam.FaceCamera = true
+            beam.Color = colorSequence
+            beam.Attachment0 = startAttachment
+            beam.Attachment1 = impactAttachment
+            beam.LightEmission = 6
+            beam.LightInfluence = 1
+            beam.Width0 = bullet_tracers_state.thickness
+            beam.Width1 = bullet_tracers_state.thickness
+            beam.Texture = bullet_tracers_state.texture
+            beam.TextureMode = Enum.TextureMode[bullet_tracers_state.texture_mode]
+            beam.TextureSpeed = 1
+            beam.TextureLength = 1
+            beam.Transparency = NumberSequence.new(0)
+            
+            -- Анимация исчезновения
+            local elapsedTime = 0
+            local fadeCoroutine = coroutine.create(function()
+                while elapsedTime < 0.5 do
+                    elapsedTime = elapsedTime + b.Heartbeat:Wait()
+                end
+                elapsedTime = 0
+                while elapsedTime < 0.1 do
+                    elapsedTime = elapsedTime + b.Heartbeat:Wait()
+                    local alpha = elapsedTime / 0.1
+                    beam.Transparency = NumberSequence.new(alpha)
+                end
+                startPart:Destroy()
+                impactPart:Destroy()
+            end)
+            coroutine.resume(fadeCoroutine)
+        end
+        
+        -- Функция очистки соединений
+        local function cleanupTracerConnections()
+            for _, connection in pairs(bullet_tracers_state.connections) do
+                if connection then
+                    pcall(function()
+                        connection:Disconnect()
+                    end)
+                end
+            end
+            bullet_tracers_state.connections = {}
+            
+            if bullet_tracers_state.container then
+                pcall(function()
+                    bullet_tracers_state.container:Destroy()
+                end)
+                bullet_tracers_state.container = nil
+            end
+        end
+        
+        -- Функция инициализации трассеров
+        local function setupBulletTracers()
+            if not bullet_tracers_state.enabled then
+                cleanupTracerConnections()
+                return
+            end
+            
+            -- Проверяем существование пути к BULLET_RAYS
+            local ignored = workspace:FindFirstChild("Ignored")
+            local siren = ignored and ignored:FindFirstChild("Siren")
+            local radius = siren and siren:FindFirstChild("Radius")
+            
+            if not radius then
+                return
+            end
+            
+            -- Соединение для отслеживания новых BULLET_RAYS
+            local childAddedConnection = radius.ChildAdded:Connect(function(object)
+                if object.Name == "BULLET_RAYS" then
+                    local ownerCharacterName = object:GetAttribute("OwnerCharacter")
+                    if ownerCharacterName and ownerCharacterName == g.Name then
+                        local startPos = object.CFrame.Position
+                        local lookVector = object.CFrame.LookVector
+                        
+                        local raycastParams = RaycastParams.new()
+                        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                        raycastParams.IgnoreWater = true
+                        raycastParams.FilterDescendantsInstances = {g.Character}
+                        
+                        local ray = workspace:Raycast(startPos, lookVector * 1000, raycastParams)
+                        if ray then
+                            local endPos = ray.Position
+                            createTracer(startPos, endPos)
+                        end
+                    end
+                end
+            end)
+            
+            -- Соединение для очистки BULLET_RAYS
+            local renderSteppedConnection = b.RenderStepped:Connect(function()
+                if bullet_tracers_state.enabled then
+                    for _, child in pairs(radius:GetChildren()) do
+                        if child.Name == "BULLET_RAYS" then
+                            child:Destroy()
+                        end
+                    end
+                end
+            end)
+            
+            bullet_tracers_state.connections.childAdded = childAddedConnection
+            bullet_tracers_state.connections.renderStepped = renderSteppedConnection
+        end
+        
+        -- Bullet Tracers Toggle
+        local _bulletTracersToggle = idkSection:Toggle({
+            Name = "Bullet tracers",
+            Flag = "bullet_tracers_enabled",
+            Default = false,
+            Callback = function(value)
+                bullet_tracers_state.enabled = value
+                setupBulletTracers()
+            end
+        })
+        
+        -- Bullet Tracers Color Picker 1
+        _bulletTracersToggle:Colorpicker({
+            Name = "Start Color",
+            Default = z(255, 255, 255),
+            Flag = "bullet_tracers_color1",
+            Callback = function(color)
+                bullet_tracers_state.color1 = color
+            end
+        })
+        
+        -- Bullet Tracers Color Picker 2
+        _bulletTracersToggle:Colorpicker({
+            Name = "End Color",
+            Default = z(255, 0, 0),
+            Flag = "bullet_tracers_color2",
+            Callback = function(color)
+                bullet_tracers_state.color2 = color
+            end
+        })
+        
+        -- Bullet Tracers Style Dropdown
+        local _bulletTracersStyleDropdown = idkSection:Dropdown({
+            Name = "Style",
+            Items = {"fent", "lightning", "chain", "arrow", "ware"},
+            Default = "fent",
+            Flag = "bullet_tracers_style",
+            Callback = function(value)
+                bullet_tracers_state.style = value
+                local style_data = tracer_styles[value]
+                if style_data then
+                    bullet_tracers_state.texture = style_data.texture
+                    bullet_tracers_state.texture_mode = style_data.mode
+                end
+            end
+        })
+        
+        -- Bullet Tracers Thickness Slider
+        local _bulletTracersSlider = idkSection:Slider({
+            Name = "Thickness",
+            Min = 0.01,
+            Max = 10,
+            Default = 1.0,
+            Decimals = 0.01,
+            Suffix = "",
+            Flag = "bullet_tracers_thickness",
+            Callback = function(value)
+                bullet_tracers_state.thickness = value
+            end
+        })
+        
     end
     
     do -- Stuff Section
