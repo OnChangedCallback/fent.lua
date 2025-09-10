@@ -57,7 +57,7 @@ local Library do
     Library = {
         Flags = { },
 
-        MenuKeybind = tostring(Enum.KeyCode.Insert), 
+        MenuKeybind = nil, -- Отключен, используется кастомный keybind в скрипте 
 
         Tween = {
             Time = 0.25,
@@ -4437,20 +4437,7 @@ local Library do
             Items["Outline"].Instance.Visible = Bool
         end
 
-        Library:Connect(UserInputService.InputBegan, function(Input, GameProcessed)
-            if GameProcessed then 
-                return
-            end
-
-            if tostring(Input.KeyCode) == Library.MenuKeybind or tostring(Input.UserInputType) == Library.MenuKeybind then
-                -- Проверяем, не находится ли пользователь в режиме ввода текста
-                if Library:IsInputFocused() then
-                    return
-                end
-                
-                Window:SetOpen(not Window.IsOpen)
-            end
-        end)
+        -- Встроенный обработчик отключен, используется кастомный keybind
 
         Window.Items = Items
         return setmetatable(Window, self)
