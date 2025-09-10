@@ -8083,6 +8083,184 @@ do -- Misc Tab
                 yawmanager_utility:setDisableAutoRotate(value)
             end
         })
+        
+        -- Custom Animation utility
+        local animation_utility = {}
+        local animation_state = {
+            enabled = false,
+            current_track = nil,
+            current_animator = nil,
+            stop_connection = nil,
+            anim_id = '10714340543', -- Floss по умолчанию
+            anim_speed = 1
+        }
+        
+        -- Остановка текущей анимации
+        function animation_utility:stopAnimation()
+            -- Отключаем соединение остановки
+            if animation_state.stop_connection then
+                animation_state.stop_connection:Disconnect()
+                animation_state.stop_connection = nil
+            end
+            
+            -- Останавливаем текущий трек
+            if animation_state.current_track then
+                pcall(function() 
+                    animation_state.current_track:Stop() 
+                end)
+                animation_state.current_track = nil
+            end
+        end
+        
+        -- Запуск новой анимации
+        function animation_utility:startAnimation(animId, speed)
+            -- Сначала останавливаем текущую анимацию
+            self:stopAnimation()
+            
+            -- Получаем персонажа и humanoid
+            local character = g.Character
+            if not character then return end
+            
+            local humanoid = character:FindFirstChildOfClass('Humanoid')
+            if not humanoid then return end
+            
+            -- Получаем или создаем animator
+            animation_state.current_animator = humanoid:FindFirstChildOfClass('Animator')
+            if not animation_state.current_animator then
+                pcall(function()
+                    animation_state.current_animator = Instance.new('Animator')
+                    animation_state.current_animator.Parent = humanoid
+                end)
+            end
+            if not animation_state.current_animator then return end
+            
+            -- Создаем анимацию
+            local animation = Instance.new('Animation')
+            animation.AnimationId = 'rbxassetid://' .. tostring(animId)
+            
+            -- Загружаем анимационный трек
+            pcall(function()
+                animation_state.current_track = animation_state.current_animator:LoadAnimation(animation)
+            end)
+            
+            if animation_state.current_track then
+                -- Останавливаем другие треки
+                pcall(function()
+                    for _, track in ipairs(animation_state.current_animator:GetPlayingAnimationTracks()) do
+                        if track ~= animation_state.current_track then 
+                            track:Stop(0) 
+                        end
+                    end
+                end)
+                
+                -- Настраиваем и запускаем
+                animation_state.current_track.Looped = true
+                animation_state.current_track.Priority = Enum.AnimationPriority.Action
+                animation_state.current_track:Play()
+                
+                -- Устанавливаем скорость
+                local final_speed = math.clamp(tonumber(speed) or 1, 0.1, 5)
+                pcall(function() 
+                    animation_state.current_track:AdjustSpeed(final_speed) 
+                end)
+                
+                -- Авто-перезапуск при остановке
+                animation_state.stop_connection = animation_state.current_track.Stopped:Connect(function()
+                    if animation_state.enabled then
+                        wait(0.1)
+                        if animation_state.enabled then
+                            self:startAnimation(animation_state.anim_id, animation_state.anim_speed)
+                        end
+                    end
+                end)
+            end
+        end
+        
+        function animation_utility:enable()
+            animation_state.enabled = true
+            self:startAnimation(animation_state.anim_id, animation_state.anim_speed)
+        end
+        
+        function animation_utility:disable()
+            animation_state.enabled = false
+            self:stopAnimation()
+        end
+        
+        function animation_utility:setAnimId(id)
+            animation_state.anim_id = id
+            if animation_state.enabled then
+                self:startAnimation(animation_state.anim_id, animation_state.anim_speed)
+            end
+        end
+        
+        function animation_utility:setSpeed(speed)
+            animation_state.anim_speed = speed
+            if animation_state.current_track then
+                pcall(function() 
+                    animation_state.current_track:AdjustSpeed(speed) 
+                end)
+            end
+        end
+        
+        -- Custom Animation UI
+        local CustomAnimToggle = FunSection:Toggle({
+            Name = "Custom Animation",
+            Flag = "CustomAnimEnabled",
+            Default = false,
+            Callback = function(value)
+                if value then
+                    animation_utility:enable()
+                else
+                    animation_utility:disable()
+                end
+            end
+        })
+        
+        -- Animation Dropdown
+        local AnimationDropdown = FunSection:Dropdown({
+            Name = "Animation",
+            Flag = "CustomAnimSelect",
+            Default = "Floss",
+            Items = {
+                "Floss",
+                "TakeTheL",
+                "CaramelDancen",
+                "ModelBreak",
+                "Ziga",
+                "ReverseFlash",
+                "SpeedMirage",
+                "DogJump"
+            },
+            Callback = function(value)
+                local animations = {
+                    ["Floss"] = "10714340543",
+                    ["TakeTheL"] = "117865821073911",
+                    ["CaramelDancen"] = "83570358825425",
+                    ["ModelBreak"] = "109873544976020",
+                    ["Ziga"] = "100823802222093",
+                    ["ReverseFlash"] = "73295259493176",
+                    ["SpeedMirage"] = "115334992181298",
+                    ["DogJump"] = "82726502516305"
+                }
+                
+                if animations[value] then
+                    animation_utility:setAnimId(animations[value])
+                end
+            end
+        })
+        
+        -- Animation Speed Slider
+        local AnimSpeedSlider = FunSection:Slider({
+            Name = "Animation Speed",
+            Flag = "CustomAnimSpeed",
+            Min = 0.1,
+            Max = 10,
+            Default = 1,
+            Decimals = 0.01,
+            Callback = function(value)
+                animation_utility:setSpeed(value)
+            end
+        })
     end
 end
 
