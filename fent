@@ -1128,7 +1128,7 @@ do -- Desync Framework
 end
 
 local K =
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/library"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/lalala"))()
 
 -- Сохраняем UI библиотеку в _G для доступа из других частей кода
 _G.FentanylUI = K
@@ -1149,6 +1149,7 @@ local L =
 )
 local M = L:Page({Name = "Ragebot", Columns = 2})
 local N = L:Page({Name = "Visuals", Columns = 2})
+local ESP_Page = L:Page({Name = "ESP", Columns = 2})
 -- local O = L:Page({Name = "Misc", Columns = 2})
 -- local P = L:Page({Name = "AntiAim", Columns = 2})
 
@@ -7447,4 +7448,599 @@ do -- Settings Tab
         )
     end
 end
+
+do -- ESP Tab
+    -- Инициализируем конфиг ESP если его нет
+    _G.ESP_Config = _G.ESP_Config or {
+        Box = {
+            Enable = false,
+            Color = z(255, 255, 255),
+            Filled = {
+                Enable = false,
+                Transparency = 0.5,
+                Gradient = {
+                    Enable = true,
+                    Color = {
+                        Start = z(255, 255, 255),
+                        End = z(0, 0, 255)
+                    },
+                    Rotating = {Enable = false}
+                }
+            }
+        },
+        Text = {
+            Name = {
+                Enable = false,
+                Color = z(255, 255, 255),
+                Size = 13,
+                Font = "TahomaBold",
+                Outline = true
+            },
+            Studs = {
+                Enable = false,
+                Color = z(255, 255, 255),
+                Size = 13,
+                Font = "TahomaBold",
+                Outline = true
+            },
+            Tool = {
+                Enable = false,
+                Color = z(255, 255, 255),
+                Size = 13,
+                Font = "TahomaBold",
+                Outline = true
+            },
+            State = {
+                Enable = false,
+                Color = z(255, 255, 255),
+                Size = 13,
+                Font = "TahomaBold",
+                Outline = true
+            }
+        },
+        Bars = {
+            Enable = false,
+            Health = {
+                Enable = false,
+                Color1 = z(0, 255, 0),
+                Color2 = z(255, 0, 0),
+                Side = "Left",
+                Offset = 4
+            },
+            Armor = {
+                Enable = false,
+                Color1 = z(0, 0, 255),
+                Color2 = z(255, 255, 0),
+                Side = "Left",
+                Offset = 4
+            }
+        },
+        
+        -- Дополнительные настройки ESP
+        LimitDistance = false,
+        MaxDistance = 1000
+    }
+    
+    -- Загружаем и инициализируем ESP библиотеку один раз
+    if not _G.ESP_Initialized then
+        local success, result = pcall(function()
+            return loadstring(game:HttpGet("https://raw.githubusercontent.com/OnChangedCallback/fent.lua/refs/heads/main/esp"))()
+        end)
+        
+        if success and result then
+            _G.ESP_Library = result
+            -- Инициализируем ESP только один раз при загрузке
+            if _G.ESP_Library and _G.ESP_Library.init then
+                _G.ESP_Library.init()
+                _G.ESP_Initialized = true
+            end
+        else
+            print("[ESP] Ошибка загрузки ESP библиотеки:", result)
+        end
+    end
+    
+    -- Секция Boxes в первой колонне
+    local BoxesSection = ESP_Page:Section({Name = "Boxes", Side = 1})
+    
+    -- Тогл для включения бокс ESP
+    local BoxESPToggle = BoxesSection:Toggle({
+        Name = "Enable Box ESP",
+        Default = false,
+        Flag = "BoxESPEnabled",
+        Callback = function(value)
+            -- Просто обновляем конфиг, библиотека сама отслеживает изменения
+            if _G.ESP_Config then
+                _G.ESP_Config.Box.Enable = value
+            end
+        end
+    })
+    
+    -- Колорпикер для цвета боксов
+    BoxESPToggle:Colorpicker({
+        Name = "Box Color",
+        Default = z(255, 255, 255),
+        Alpha = false,
+        Flag = "BoxESPColor",
+        Callback = function(color)
+            -- Обновляем цвет боксов в конфиге
+            if _G.ESP_Config then
+                _G.ESP_Config.Box.Color = color
+            end
+        end
+    })
+    
+    -- Тогл для заливки боксов
+    local FilledToggle = BoxesSection:Toggle({
+        Name = "Filled",
+        Default = false,
+        Flag = "BoxESPFilled",
+        Callback = function(value)
+            -- Обновляем конфиг для заливки боксов
+            if _G.ESP_Config then
+                _G.ESP_Config.Box.Filled.Enable = value
+            end
+        end
+    })
+    
+    -- Первый колорпикер для градиента (начальный цвет)
+    FilledToggle:Colorpicker({
+        Name = "Gradient Start",
+        Default = z(255, 255, 255),
+        Alpha = false,
+        Flag = "BoxESPGradientStart",
+        Callback = function(color)
+            -- Обновляем начальный цвет градиента
+            if _G.ESP_Config then
+                _G.ESP_Config.Box.Filled.Gradient.Color.Start = color
+                -- Градиент всегда включен
+                _G.ESP_Config.Box.Filled.Gradient.Enable = true
+            end
+        end
+    })
+    
+    -- Второй колорпикер для градиента (конечный цвет)
+    FilledToggle:Colorpicker({
+        Name = "Gradient End",
+        Default = z(0, 0, 255),
+        Alpha = false,
+        Flag = "BoxESPGradientEnd",
+        Callback = function(color)
+            -- Обновляем конечный цвет градиента
+            if _G.ESP_Config then
+                _G.ESP_Config.Box.Filled.Gradient.Color.End = color
+                -- Градиент всегда включен
+                _G.ESP_Config.Box.Filled.Gradient.Enable = true
+            end
+        end
+    })
+    
+    -- Тогл для вращающегося градиента
+    BoxesSection:Toggle({
+        Name = "Rotating",
+        Default = false,
+        Flag = "BoxESPRotating",
+        Callback = function(value)
+            -- Обновляем настройку вращения градиента
+            if _G.ESP_Config then
+                _G.ESP_Config.Box.Filled.Gradient.Rotating.Enable = value
+            end
+        end
+    })
+    
+    -- Секция HealthBar в первой колонне
+    local HealthBarSection = ESP_Page:Section({Name = "HealthBar", Side = 1})
+    
+    -- Тогл для включения HealthBar
+    local HealthBarToggle = HealthBarSection:Toggle({
+        Name = "Enable HealthBar",
+        Default = false,
+        Flag = "HealthBarEnabled",
+        Callback = function(value)
+            -- Обновляем конфиг для HealthBar
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Health.Enable = value
+            end
+        end
+    })
+    
+    -- Первый колорпикер для градиента HealthBar (начальный цвет)
+    HealthBarToggle:Colorpicker({
+        Name = "Health Start",
+        Default = z(0, 255, 0),
+        Alpha = false,
+        Flag = "HealthBarGradientStart",
+        Callback = function(color)
+            -- Обновляем начальный цвет градиента HealthBar
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Health.Color1 = color
+            end
+        end
+    })
+    
+    -- Второй колорпикер для градиента HealthBar (конечный цвет)
+    HealthBarToggle:Colorpicker({
+        Name = "Health End",
+        Default = z(255, 0, 0),
+        Alpha = false,
+        Flag = "HealthBarGradientEnd",
+        Callback = function(color)
+            -- Обновляем конечный цвет градиента HealthBar
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Health.Color2 = color
+            end
+        end
+    })
+    
+    -- Дропдаун для ориентации HealthBar
+    HealthBarSection:Dropdown({
+        Name = "Side",
+        Items = {"Left", "Right", "Top", "Bot"},
+        Default = "Left",
+        Flag = "HealthBarSide",
+        Callback = function(value)
+            -- Обновляем ориентацию HealthBar
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Health.Side = value
+            end
+        end
+    })
+    
+    -- Слайдер для padding HealthBar
+    HealthBarSection:Slider({
+        Name = "Padding",
+        Min = 0,
+        Max = 20,
+        Default = 4,
+        Flag = "HealthBarPadding",
+        Callback = function(value)
+            -- Обновляем padding HealthBar
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Health.Offset = value
+            end
+        end
+    })
+    
+    
+    -- Секция Armor в первой колонне
+    local ArmorSection = ESP_Page:Section({Name = "Armor", Side = 1})
+    
+    -- Тогл для включения Armor
+    local ArmorToggle = ArmorSection:Toggle({
+        Name = "Enable Armor",
+        Default = false,
+        Flag = "ArmorEnabled",
+        Callback = function(value)
+            -- Обновляем конфиг для Armor
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Armor.Enable = value
+            end
+        end
+    })
+    
+    -- Первый колорпикер для градиента Armor (начальный цвет)
+    ArmorToggle:Colorpicker({
+        Name = "Armor Start",
+        Default = z(0, 0, 255),
+        Alpha = false,
+        Flag = "ArmorGradientStart",
+        Callback = function(color)
+            -- Обновляем начальный цвет градиента Armor
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Armor.Color1 = color
+            end
+        end
+    })
+    
+    -- Второй колорпикер для градиента Armor (конечный цвет)
+    ArmorToggle:Colorpicker({
+        Name = "Armor End",
+        Default = z(255, 255, 0),
+        Alpha = false,
+        Flag = "ArmorGradientEnd",
+        Callback = function(color)
+            -- Обновляем конечный цвет градиента Armor
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Armor.Color2 = color
+            end
+        end
+    })
+    
+    -- Дропдаун для ориентации Armor
+    ArmorSection:Dropdown({
+        Name = "Side",
+        Items = {"Left", "Right", "Top", "Bot"},
+        Default = "Left",
+        Flag = "ArmorSide",
+        Callback = function(value)
+            -- Обновляем ориентацию Armor
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Armor.Side = value
+            end
+        end
+    })
+    
+    -- Слайдер для padding Armor
+    ArmorSection:Slider({
+        Name = "Padding",
+        Min = 0,
+        Max = 20,
+        Default = 4,
+        Flag = "ArmorPadding",
+        Callback = function(value)
+            -- Обновляем padding Armor
+            if _G.ESP_Config then
+                _G.ESP_Config.Bars.Armor.Offset = value
+            end
+        end
+    })
+    
+    
+    -- Секция Names во второй колонне
+    local NamesSection = ESP_Page:Section({Name = "Names", Side = 2})
+    
+    -- Тогл для включения Name ESP
+    local NameToggle = NamesSection:Toggle({
+        Name = "Enable Name ESP",
+        Default = false,
+        Flag = "NameESPEnabled",
+        Callback = function(value)
+            -- Обновляем конфиг для Name ESP
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Name.Enable = value
+            end
+        end
+    })
+    
+    -- Колорпикер для цвета шрифта
+    NameToggle:Colorpicker({
+        Name = "Text Color",
+        Default = z(255, 255, 255),
+        Alpha = false,
+        Flag = "NameESPColor",
+        Callback = function(color)
+            -- Обновляем цвет шрифта
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Name.Color = color
+            end
+        end
+    })
+    
+    -- Слайдер для размера шрифта Name
+    NamesSection:Slider({
+        Name = "Font Size",
+        Min = 8,
+        Max = 24,
+        Default = 13,
+        Flag = "NameESPFontSize",
+        Callback = function(value)
+            -- Обновляем размер шрифта Name
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Name.Size = value
+            end
+        end
+    })
+    
+    -- Дропдаун для позиции Name ESP
+    NamesSection:Dropdown({
+        Name = "Side",
+        Items = {"Top", "Bot"},
+        Default = "Top",
+        Flag = "NameESPSide",
+        Callback = function(value)
+            -- Обновляем позицию Name ESP
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Name.Side = value
+            end
+        end
+    })
+    
+    -- Секция State во второй колонне
+    local StateSection = ESP_Page:Section({Name = "State", Side = 2})
+    
+    -- Тогл для включения State ESP
+    local StateToggle = StateSection:Toggle({
+        Name = "Enable State ESP",
+        Default = false,
+        Flag = "StateESPEnabled",
+        Callback = function(value)
+            -- Обновляем конфиг для State ESP
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.State.Enable = value
+            end
+        end
+    })
+    
+    -- Колорпикер для цвета шрифта State
+    StateToggle:Colorpicker({
+        Name = "Text Color",
+        Default = z(255, 255, 255),
+        Alpha = false,
+        Flag = "StateESPColor",
+        Callback = function(color)
+            -- Обновляем цвет шрифта State
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.State.Color = color
+            end
+        end
+    })
+    
+    -- Слайдер для размера шрифта State
+    StateSection:Slider({
+        Name = "Font Size",
+        Min = 8,
+        Max = 24,
+        Default = 13,
+        Flag = "StateESPFontSize",
+        Callback = function(value)
+            -- Обновляем размер шрифта State
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.State.Size = value
+            end
+        end
+    })
+    
+    -- Дропдаун для позиции State ESP
+    StateSection:Dropdown({
+        Name = "Side",
+        Items = {"Top", "Bot"},
+        Default = "Bot",
+        Flag = "StateESPSide",
+        Callback = function(value)
+            -- Обновляем позицию State ESP
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.State.Side = value
+            end
+        end
+    })
+    
+    -- Секция Distance во второй колонне
+    local DistanceSection = ESP_Page:Section({Name = "Distance", Side = 2})
+    
+    -- Тогл для включения Distance ESP
+    local DistanceToggle = DistanceSection:Toggle({
+        Name = "Enable Distance ESP",
+        Default = false,
+        Flag = "DistanceESPEnabled",
+        Callback = function(value)
+            -- Обновляем конфиг для Distance ESP
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Studs.Enable = value
+            end
+        end
+    })
+    
+    -- Колорпикер для цвета шрифта Distance
+    DistanceToggle:Colorpicker({
+        Name = "Text Color",
+        Default = z(255, 255, 255),
+        Alpha = false,
+        Flag = "DistanceESPColor",
+        Callback = function(color)
+            -- Обновляем цвет шрифта Distance
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Studs.Color = color
+            end
+        end
+    })
+    
+    -- Слайдер для размера шрифта Distance
+    DistanceSection:Slider({
+        Name = "Font Size",
+        Min = 8,
+        Max = 24,
+        Default = 13,
+        Flag = "DistanceESPFontSize",
+        Callback = function(value)
+            -- Обновляем размер шрифта Distance
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Studs.Size = value
+            end
+        end
+    })
+    
+    -- Дропдаун для позиции Distance ESP
+    DistanceSection:Dropdown({
+        Name = "Side",
+        Items = {"Top", "Bot"},
+        Default = "Bot",
+        Flag = "DistanceESPSide",
+        Callback = function(value)
+            -- Обновляем позицию Distance ESP
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Studs.Side = value
+            end
+        end
+    })
+    
+    -- Секция Tool во второй колонне
+    local ToolSection = ESP_Page:Section({Name = "Tool", Side = 2})
+    
+    -- Тогл для включения Tool ESP
+    local ToolToggle = ToolSection:Toggle({
+        Name = "Enable Tool ESP",
+        Default = false,
+        Flag = "ToolESPEnabled",
+        Callback = function(value)
+            -- Обновляем конфиг для Tool ESP
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Tool.Enable = value
+            end
+        end
+    })
+    
+    -- Колорпикер для цвета шрифта Tool
+    ToolToggle:Colorpicker({
+        Name = "Text Color",
+        Default = z(255, 255, 255),
+        Alpha = false,
+        Flag = "ToolESPColor",
+        Callback = function(color)
+            -- Обновляем цвет шрифта Tool
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Tool.Color = color
+            end
+        end
+    })
+    
+    -- Слайдер для размера шрифта Tool
+    ToolSection:Slider({
+        Name = "Font Size",
+        Min = 8,
+        Max = 24,
+        Default = 13,
+        Flag = "ToolESPFontSize",
+        Callback = function(value)
+            -- Обновляем размер шрифта Tool
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Tool.Size = value
+            end
+        end
+    })
+    
+    -- Дропдаун для позиции Tool ESP
+    ToolSection:Dropdown({
+        Name = "Side",
+        Items = {"Top", "Bot"},
+        Default = "Bot",
+        Flag = "ToolESPSide",
+        Callback = function(value)
+            -- Обновляем позицию Tool ESP
+            if _G.ESP_Config then
+                _G.ESP_Config.Text.Tool.Side = value
+            end
+        end
+    })
+    
+    -- Секция Other во второй колонне
+    local OtherSection = ESP_Page:Section({Name = "Other", Side = 2})
+    
+    -- Тогл для ограничения дистанции
+    local LimitDistanceToggle = OtherSection:Toggle({
+        Name = "Limit Distance",
+        Default = false,
+        Flag = "LimitDistanceEnabled",
+        Callback = function(value)
+            -- Обновляем конфиг для ограничения дистанции
+            if _G.ESP_Config then
+                _G.ESP_Config.LimitDistance = value
+            end
+        end
+    })
+    
+    -- Слайдер для максимальной дистанции
+    OtherSection:Slider({
+        Name = "Max Distance",
+        Min = 100,
+        Max = 10000,
+        Default = 1000,
+        Flag = "MaxDistanceValue",
+        Callback = function(value)
+            -- Обновляем максимальную дистанцию
+            if _G.ESP_Config then
+                _G.ESP_Config.MaxDistance = value
+            end
+        end
+    })
+end
+
 K:Notification("Script loaded, press Insert to toggle GUI", 4, z(0, 255, 0))
