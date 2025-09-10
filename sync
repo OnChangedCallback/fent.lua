@@ -5340,6 +5340,535 @@ do -- Visuals Tab
         _G.TrailUtility = trail_utility
         
     end
+    
+    do -- World Section
+        local worldSection = N:Section({Name = "World", Side = 2})
+        
+        -- Ambient utility
+        local ambient_utility = {}
+        local ambient_state = {
+            enabled = false,
+            custom_color = z(255, 255, 255),
+            default_ambient = nil,
+            default_outdoor_ambient = nil,
+            lighting = nil
+        }
+        
+        -- Функция инициализации
+        function ambient_utility:init()
+            ambient_state.lighting = game:GetService("Lighting")
+            
+            -- Сохраняем дефолтные значения при первом запуске
+            if not ambient_state.default_ambient then
+                ambient_state.default_ambient = ambient_state.lighting.Ambient
+            end
+            if not ambient_state.default_outdoor_ambient then
+                ambient_state.default_outdoor_ambient = ambient_state.lighting.OutdoorAmbient
+            end
+        end
+        
+        -- Функция применения кастомного ambient
+        function ambient_utility:applyCustomAmbient()
+            if not ambient_state.lighting then
+                self:init()
+            end
+            
+            if ambient_state.enabled then
+                -- Применяем кастомный цвет
+                ambient_state.lighting.Ambient = ambient_state.custom_color
+                ambient_state.lighting.OutdoorAmbient = ambient_state.custom_color
+            else
+                -- Восстанавливаем дефолтные значения
+                self:restoreDefaults()
+            end
+        end
+        
+        -- Функция восстановления дефолтных значений
+        function ambient_utility:restoreDefaults()
+            if ambient_state.lighting and ambient_state.default_ambient and ambient_state.default_outdoor_ambient then
+                ambient_state.lighting.Ambient = ambient_state.default_ambient
+                ambient_state.lighting.OutdoorAmbient = ambient_state.default_outdoor_ambient
+            end
+        end
+        
+        -- Функция обновления цвета
+        function ambient_utility:updateColor(color)
+            ambient_state.custom_color = color
+            if ambient_state.enabled then
+                self:applyCustomAmbient()
+            end
+        end
+        
+        -- Функция включения/выключения
+        function ambient_utility:setEnabled(enabled)
+            ambient_state.enabled = enabled
+            self:applyCustomAmbient()
+        end
+        
+        -- Инициализируем утилиту
+        ambient_utility:init()
+        
+        -- Создаем UI элементы
+        local _ambientToggle = worldSection:Toggle({
+            Name = "Ambient",
+            Default = false,
+            Flag = "world_ambient",
+            Callback = function(value)
+                ambient_utility:setEnabled(value)
+            end
+        })
+        
+        -- Колорпикер для Ambient
+        _ambientToggle:Colorpicker({
+            Name = "Ambient Color",
+            Default = z(255, 255, 255),
+            Flag = "world_ambient_color",
+            Callback = function(color)
+                ambient_utility:updateColor(color)
+            end
+        })
+        
+        -- Обработчик при выходе/смерти для восстановления дефолтных значений
+        g.CharacterRemoving:Connect(function()
+            ambient_utility:restoreDefaults()
+        end)
+        
+        -- Сохраняем утилиту в глобальную область
+        _G.AmbientUtility = ambient_utility
+        
+        -- Tint utility
+        local tint_utility = {}
+        local tint_state = {
+            enabled = false,
+            custom_color = z(255, 255, 255),
+            color_correction = nil
+        }
+        
+        -- Функция инициализации Tint
+        function tint_utility:init()
+            -- Ищем существующий ColorCorrection или создаем новый
+            tint_state.color_correction = game:GetService("Lighting"):FindFirstChild("FentanylTint")
+            
+            if not tint_state.color_correction then
+                tint_state.color_correction = Instance.new("ColorCorrectionEffect")
+                tint_state.color_correction.Name = "FentanylTint"
+                tint_state.color_correction.Enabled = false
+                tint_state.color_correction.TintColor = z(255, 255, 255)
+                tint_state.color_correction.Parent = game:GetService("Lighting")
+            end
+        end
+        
+        -- Функция применения tint
+        function tint_utility:applyTint()
+            if not tint_state.color_correction then
+                self:init()
+            end
+            
+            if tint_state.enabled then
+                tint_state.color_correction.Enabled = true
+                tint_state.color_correction.TintColor = tint_state.custom_color
+            else
+                tint_state.color_correction.Enabled = false
+            end
+        end
+        
+        -- Функция обновления цвета
+        function tint_utility:updateColor(color)
+            tint_state.custom_color = color
+            if tint_state.color_correction then
+                tint_state.color_correction.TintColor = color
+            end
+        end
+        
+        -- Функция включения/выключения
+        function tint_utility:setEnabled(enabled)
+            tint_state.enabled = enabled
+            self:applyTint()
+        end
+        
+        -- Функция очистки
+        function tint_utility:cleanup()
+            if tint_state.color_correction then
+                tint_state.color_correction.Enabled = false
+            end
+        end
+        
+        -- Инициализируем tint утилиту
+        tint_utility:init()
+        
+        -- Создаем UI элементы для Tint
+        local _tintToggle = worldSection:Toggle({
+            Name = "Tint",
+            Default = false,
+            Flag = "world_tint",
+            Callback = function(value)
+                tint_utility:setEnabled(value)
+            end
+        })
+        
+        -- Колорпикер для Tint
+        _tintToggle:Colorpicker({
+            Name = "Tint Color",
+            Default = z(255, 255, 255),
+            Flag = "world_tint_color",
+            Callback = function(color)
+                tint_utility:updateColor(color)
+            end
+        })
+        
+        -- Color Correction utility
+        local color_correction_utility = {}
+        local color_correction_state = {
+            enabled = false,
+            saturation = 0,
+            brightness = 0,
+            contrast = 0,
+            color_correction = nil
+        }
+        
+        -- Функция инициализации Color Correction
+        function color_correction_utility:init()
+            -- Ищем существующий ColorCorrection или создаем новый
+            color_correction_state.color_correction = game:GetService("Lighting"):FindFirstChild("FentanylColorCorrection")
+            
+            if not color_correction_state.color_correction then
+                color_correction_state.color_correction = Instance.new("ColorCorrectionEffect")
+                color_correction_state.color_correction.Name = "FentanylColorCorrection"
+                color_correction_state.color_correction.Enabled = false
+                color_correction_state.color_correction.Saturation = 0
+                color_correction_state.color_correction.Brightness = 0
+                color_correction_state.color_correction.Contrast = 0
+                color_correction_state.color_correction.Parent = game:GetService("Lighting")
+            end
+        end
+        
+        -- Функция применения color correction
+        function color_correction_utility:applyCorrection()
+            if not color_correction_state.color_correction then
+                self:init()
+            end
+            
+            if color_correction_state.enabled then
+                color_correction_state.color_correction.Enabled = true
+                color_correction_state.color_correction.Saturation = color_correction_state.saturation
+                color_correction_state.color_correction.Brightness = color_correction_state.brightness
+                color_correction_state.color_correction.Contrast = color_correction_state.contrast
+            else
+                color_correction_state.color_correction.Enabled = false
+            end
+        end
+        
+        -- Функция обновления saturation
+        function color_correction_utility:updateSaturation(value)
+            color_correction_state.saturation = value
+            if color_correction_state.color_correction and color_correction_state.enabled then
+                color_correction_state.color_correction.Saturation = value
+            end
+        end
+        
+        -- Функция обновления brightness
+        function color_correction_utility:updateBrightness(value)
+            color_correction_state.brightness = value
+            if color_correction_state.color_correction and color_correction_state.enabled then
+                color_correction_state.color_correction.Brightness = value
+            end
+        end
+        
+        -- Функция обновления contrast
+        function color_correction_utility:updateContrast(value)
+            color_correction_state.contrast = value
+            if color_correction_state.color_correction and color_correction_state.enabled then
+                color_correction_state.color_correction.Contrast = value
+            end
+        end
+        
+        -- Функция включения/выключения
+        function color_correction_utility:setEnabled(enabled)
+            color_correction_state.enabled = enabled
+            self:applyCorrection()
+        end
+        
+        -- Функция очистки
+        function color_correction_utility:cleanup()
+            if color_correction_state.color_correction then
+                color_correction_state.color_correction.Enabled = false
+            end
+        end
+        
+        -- Инициализируем color correction утилиту
+        color_correction_utility:init()
+        
+        -- Создаем UI элементы для Color Correction
+        local _colorCorrectionToggle = worldSection:Toggle({
+            Name = "Color Correction",
+            Default = false,
+            Flag = "world_color_correction",
+            Callback = function(value)
+                color_correction_utility:setEnabled(value)
+            end
+        })
+        
+        -- Слайдер для Saturation
+        worldSection:Slider({
+            Name = "Saturation",
+            Min = -1,
+            Max = 1,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_saturation",
+            Callback = function(value)
+                color_correction_utility:updateSaturation(value)
+            end
+        })
+        
+        -- Слайдер для Brightness
+        worldSection:Slider({
+            Name = "Brightness",
+            Min = -1,
+            Max = 1,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_brightness",
+            Callback = function(value)
+                color_correction_utility:updateBrightness(value)
+            end
+        })
+        
+        -- Слайдер для Contrast
+        worldSection:Slider({
+            Name = "Contrast",
+            Min = -1,
+            Max = 1,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_contrast",
+            Callback = function(value)
+                color_correction_utility:updateContrast(value)
+            end
+        })
+        
+        -- Atmosphere utility
+        local atmosphere_utility = {}
+        local atmosphere_state = {
+            enabled = false,
+            color = z(199, 199, 199),
+            decay = z(92, 60, 13),
+            density = 0.395,
+            haze = 0,
+            glare = 0,
+            offset = 0,
+            atmosphere = nil
+        }
+        
+        -- Функция инициализации Atmosphere
+        function atmosphere_utility:init()
+            -- Ищем существующий Atmosphere или создаем новый
+            atmosphere_state.atmosphere = game:GetService("Lighting"):FindFirstChild("FentanylAtmosphere")
+            
+            if not atmosphere_state.atmosphere then
+                atmosphere_state.atmosphere = Instance.new("Atmosphere")
+                atmosphere_state.atmosphere.Name = "FentanylAtmosphere"
+                atmosphere_state.atmosphere.Color = atmosphere_state.color
+                atmosphere_state.atmosphere.Decay = atmosphere_state.decay
+                atmosphere_state.atmosphere.Density = atmosphere_state.density
+                atmosphere_state.atmosphere.Haze = atmosphere_state.haze
+                atmosphere_state.atmosphere.Glare = atmosphere_state.glare
+                atmosphere_state.atmosphere.Offset = atmosphere_state.offset
+                atmosphere_state.atmosphere.Parent = game:GetService("Lighting")
+            end
+        end
+        
+        -- Функция применения atmosphere
+        function atmosphere_utility:applyAtmosphere()
+            if not atmosphere_state.atmosphere then
+                self:init()
+            end
+            
+            if atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Color = atmosphere_state.color
+                atmosphere_state.atmosphere.Decay = atmosphere_state.decay
+                atmosphere_state.atmosphere.Density = atmosphere_state.density
+                atmosphere_state.atmosphere.Haze = atmosphere_state.haze
+                atmosphere_state.atmosphere.Glare = atmosphere_state.glare
+                atmosphere_state.atmosphere.Offset = atmosphere_state.offset
+            else
+                -- Восстанавливаем дефолтные значения
+                atmosphere_state.atmosphere.Color = z(199, 199, 199)
+                atmosphere_state.atmosphere.Decay = z(92, 60, 13)
+                atmosphere_state.atmosphere.Density = 0.395
+                atmosphere_state.atmosphere.Haze = 0
+                atmosphere_state.atmosphere.Glare = 0
+                atmosphere_state.atmosphere.Offset = 0
+            end
+        end
+        
+        -- Функция обновления цвета
+        function atmosphere_utility:updateColor(color)
+            atmosphere_state.color = color
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Color = color
+            end
+        end
+        
+        -- Функция обновления decay
+        function atmosphere_utility:updateDecay(color)
+            atmosphere_state.decay = color
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Decay = color
+            end
+        end
+        
+        -- Функция обновления density
+        function atmosphere_utility:updateDensity(value)
+            atmosphere_state.density = value
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Density = value
+            end
+        end
+        
+        -- Функция обновления haze
+        function atmosphere_utility:updateHaze(value)
+            atmosphere_state.haze = value
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Haze = value
+            end
+        end
+        
+        -- Функция обновления glare
+        function atmosphere_utility:updateGlare(value)
+            atmosphere_state.glare = value
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Glare = value
+            end
+        end
+        
+        -- Функция обновления offset
+        function atmosphere_utility:updateOffset(value)
+            atmosphere_state.offset = value
+            if atmosphere_state.atmosphere and atmosphere_state.enabled then
+                atmosphere_state.atmosphere.Offset = value
+            end
+        end
+        
+        -- Функция включения/выключения
+        function atmosphere_utility:setEnabled(enabled)
+            atmosphere_state.enabled = enabled
+            self:applyAtmosphere()
+        end
+        
+        -- Функция очистки
+        function atmosphere_utility:cleanup()
+            if atmosphere_state.atmosphere then
+                -- Восстанавливаем дефолтные значения
+                atmosphere_state.atmosphere.Color = z(199, 199, 199)
+                atmosphere_state.atmosphere.Decay = z(92, 60, 13)
+                atmosphere_state.atmosphere.Density = 0.395
+                atmosphere_state.atmosphere.Haze = 0
+                atmosphere_state.atmosphere.Glare = 0
+                atmosphere_state.atmosphere.Offset = 0
+            end
+        end
+        
+        -- Инициализируем atmosphere утилиту
+        atmosphere_utility:init()
+        
+        -- Создаем UI элементы для Atmosphere
+        local _atmosphereToggle = worldSection:Toggle({
+            Name = "Atmosphere",
+            Default = false,
+            Flag = "world_atmosphere",
+            Callback = function(value)
+                atmosphere_utility:setEnabled(value)
+            end
+        })
+        
+        -- Колорпикер для Color
+        _atmosphereToggle:Colorpicker({
+            Name = "Color",
+            Default = z(199, 199, 199),
+            Flag = "world_atmosphere_color",
+            Callback = function(color)
+                atmosphere_utility:updateColor(color)
+            end
+        })
+        
+        -- Колорпикер для Decay
+        _atmosphereToggle:Colorpicker({
+            Name = "Decay",
+            Default = z(92, 60, 13),
+            Flag = "world_atmosphere_decay",
+            Callback = function(color)
+                atmosphere_utility:updateDecay(color)
+            end
+        })
+        
+        -- Слайдер для Density
+        worldSection:Slider({
+            Name = "Density",
+            Min = 0,
+            Max = 1,
+            Default = 0.395,
+            Decimals = 0.01,
+            Flag = "world_atmosphere_density",
+            Callback = function(value)
+                atmosphere_utility:updateDensity(value)
+            end
+        })
+        
+        -- Слайдер для Haze
+        worldSection:Slider({
+            Name = "Haze",
+            Min = 0,
+            Max = 3,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_atmosphere_haze",
+            Callback = function(value)
+                atmosphere_utility:updateHaze(value)
+            end
+        })
+        
+        -- Слайдер для Glare
+        worldSection:Slider({
+            Name = "Glare",
+            Min = 0,
+            Max = 2,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_atmosphere_glare",
+            Callback = function(value)
+                atmosphere_utility:updateGlare(value)
+            end
+        })
+        
+        -- Слайдер для Offset
+        worldSection:Slider({
+            Name = "Offset",
+            Min = 0,
+            Max = 1,
+            Default = 0,
+            Decimals = 0.01,
+            Flag = "world_atmosphere_offset",
+            Callback = function(value)
+                atmosphere_utility:updateOffset(value)
+            end
+        })
+        
+        -- Обработчики очистки при выходе
+        g.CharacterRemoving:Connect(function()
+            ambient_utility:restoreDefaults()
+            tint_utility:cleanup()
+            color_correction_utility:cleanup()
+            atmosphere_utility:cleanup()
+        end)
+        
+        -- Сохраняем утилиты в глобальную область
+        _G.AmbientUtility = ambient_utility
+        _G.TintUtility = tint_utility
+        _G.ColorCorrectionUtility = color_correction_utility
+        _G.AtmosphereUtility = atmosphere_utility
+    end
+    
 end -- End Visuals Tab
 
 do -- Watermark & Keybinds
