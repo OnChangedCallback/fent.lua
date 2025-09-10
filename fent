@@ -8261,6 +8261,256 @@ do -- Misc Tab
                 animation_utility:setSpeed(value)
             end
         })
+        
+        -- Multi Guns utility
+        local multiguns_utility = {}
+        local multiguns_state = {
+            enabled = false,
+            equipped_tools = {},
+            tool_added_conn = nil,
+            tool_removed_conn = nil,
+            character = nil,
+            char_added_conn = nil,
+            heartbeat_conn = nil
+        }
+        
+        local allowed_tools = {
+            ["[AUG]"] = true,
+            ["[Rifle]"] = true,
+            ["[LMG]"] = true,
+            ["[P90]"] = true,
+            ["[Flintlock]"] = true,
+            ["[Revolver]"] = true,
+            ["[Double-Barrel SG]"] = true,
+            ["[AK47]"] = true,
+            ["[TacticalShotgun]"] = true,
+        }
+        
+        -- Экипировка всех оружий
+        function multiguns_utility:equipAllWeapons()
+            multiguns_state.equipped_tools = {}
+            
+            local backpack = g:FindFirstChild("Backpack")
+            if backpack then
+                for _, tool in ipairs(backpack:GetChildren()) do
+                    if tool:IsA("Tool") and allowed_tools[tool.Name] then
+                        tool.Parent = multiguns_state.character
+                    end
+                end
+            end
+            
+            for _, tool in ipairs(multiguns_state.character:GetChildren()) do
+                if tool:IsA("Tool") and allowed_tools[tool.Name] and tool:FindFirstChild("Handle") then
+                    table.insert(multiguns_state.equipped_tools, tool)
+                end
+            end
+        end
+        
+        -- Обработка добавления персонажа
+        function multiguns_utility:onCharacterAdded(new_char)
+            multiguns_state.character = new_char
+            
+            if multiguns_state.tool_added_conn then 
+                multiguns_state.tool_added_conn:Disconnect() 
+            end
+            if multiguns_state.tool_removed_conn then 
+                multiguns_state.tool_removed_conn:Disconnect() 
+            end
+            
+            multiguns_state.tool_added_conn = new_char.ChildAdded:Connect(function(child)
+                if child:IsA("Tool") and allowed_tools[child.Name] and child:FindFirstChild("Handle") then
+                    table.insert(multiguns_state.equipped_tools, child)
+                end
+            end)
+            
+            multiguns_state.tool_removed_conn = new_char.ChildRemoved:Connect(function(child)
+                if child:IsA("Tool") then
+                    for i, tool in ipairs(multiguns_state.equipped_tools) do
+                        if tool == child then
+                            table.remove(multiguns_state.equipped_tools, i)
+                            break
+                        end
+                    end
+                end
+            end)
+            
+            if multiguns_state.enabled then
+                self:equipAllWeapons()
+            end
+        end
+        
+        function multiguns_utility:enable()
+            multiguns_state.enabled = true
+            multiguns_state.character = g.Character
+            
+            if multiguns_state.character then
+                self:onCharacterAdded(multiguns_state.character)
+            end
+            
+            -- Подключаемся к событию добавления персонажа
+            if not multiguns_state.char_added_conn then
+                multiguns_state.char_added_conn = g.CharacterAdded:Connect(function(new_char)
+                    self:onCharacterAdded(new_char)
+                end)
+            end
+            
+            -- Циклическая экипировка оружий
+            multiguns_state.heartbeat_conn = b.Heartbeat:Connect(function()
+                if not multiguns_state.enabled then return end
+                if not multiguns_state.character then return end
+                
+                self:equipAllWeapons()
+            end)
+        end
+        
+        function multiguns_utility:disable()
+            multiguns_state.enabled = false
+            
+            if multiguns_state.heartbeat_conn then
+                multiguns_state.heartbeat_conn:Disconnect()
+                multiguns_state.heartbeat_conn = nil
+            end
+            
+            if multiguns_state.tool_added_conn then
+                multiguns_state.tool_added_conn:Disconnect()
+                multiguns_state.tool_added_conn = nil
+            end
+            
+            if multiguns_state.tool_removed_conn then
+                multiguns_state.tool_removed_conn:Disconnect()
+                multiguns_state.tool_removed_conn = nil
+            end
+            
+            if multiguns_state.char_added_conn then
+                multiguns_state.char_added_conn:Disconnect()
+                multiguns_state.char_added_conn = nil
+            end
+            
+            multiguns_state.equipped_tools = {}
+        end
+        
+        -- Multi Guns Toggle
+        local _MultiGunsToggle = FunSection:Toggle({
+            Name = "Multi Guns",
+            Flag = "MultiGunsEnabled",
+            Default = false,
+            Callback = function(value)
+                if value then
+                    multiguns_utility:enable()
+                else
+                    multiguns_utility:disable()
+                end
+            end
+        })
+        
+        -- Killaura utility
+        local killaura_utility = {}
+        local killaura_state = {
+            enabled = false,
+            heartbeat_conn = nil
+        }
+        
+        -- Получение текущей цели
+        function killaura_utility:getCurrentTarget()
+            local closest_target = nil
+            local closest_distance = math.huge
+            local character = g.Character
+            if not character then return nil end
+            
+            local local_root = character:FindFirstChild("HumanoidRootPart")
+            if not local_root then return nil end
+            
+            for _, other_player in ipairs(a:GetPlayers()) do
+                if other_player ~= g and other_player.Character then
+                    local target_char = other_player.Character
+                    local target_head = target_char:FindFirstChild("Head")
+                    local body_effects = target_char:FindFirstChild("BodyEffects")
+                    local target_root = target_char:FindFirstChild("HumanoidRootPart")
+                    
+                    if target_head and target_root and body_effects and
+                       not body_effects["K.O"].Value and
+                       not target_char:FindFirstChild("GRABBING_CONSTRAINT") and
+                       not target_char:FindFirstChildOfClass("ForceField") and
+                       target_char:FindFirstChild("FULLY_LOADED_CHAR") then
+                        
+                        local distance = (target_root.Position - local_root.Position).Magnitude
+                        if distance < closest_distance then
+                            closest_distance = distance
+                            closest_target = target_head
+                        end
+                    end
+                end
+            end
+            
+            return closest_target
+        end
+        
+        -- Получение всех экипированных оружий
+        function killaura_utility:getEquippedWeapons()
+            local equipped_weapons = {}
+            local character = g.Character
+            if not character then return equipped_weapons end
+            
+            for _, tool in ipairs(character:GetChildren()) do
+                if tool:IsA("Tool") and tool:FindFirstChild("Handle") then
+                    table.insert(equipped_weapons, tool)
+                end
+            end
+            
+            return equipped_weapons
+        end
+        
+        function killaura_utility:enable()
+            killaura_state.enabled = true
+            
+            -- Основной цикл стрельбы
+            killaura_state.heartbeat_conn = b.Heartbeat:Connect(function()
+                if not killaura_state.enabled then return end
+                
+                local target = self:getCurrentTarget()
+                if not target then return end
+                
+                local equipped_weapons = self:getEquippedWeapons()
+                
+                for _, tool in ipairs(equipped_weapons) do
+                    if tool.Parent == g.Character and tool:FindFirstChild("Handle") then
+                        pcall(function()
+                            main_remote:FireServer(
+                                "ShootGun",
+                                tool.Handle,
+                                tool.Handle.CFrame.Position,
+                                target.Position,
+                                target,
+                                B(0, 0, 0)
+                            )
+                        end)
+                    end
+                end
+            end)
+        end
+        
+        function killaura_utility:disable()
+            killaura_state.enabled = false
+            
+            if killaura_state.heartbeat_conn then
+                killaura_state.heartbeat_conn:Disconnect()
+                killaura_state.heartbeat_conn = nil
+            end
+        end
+        
+        -- Killaura Toggle
+        local _KillauraToggle = FunSection:Toggle({
+            Name = "Killaura",
+            Flag = "KillauraEnabled",
+            Default = false,
+            Callback = function(value)
+                if value then
+                    killaura_utility:enable()
+                else
+                    killaura_utility:disable()
+                end
+            end
+        })
     end
 end
 
