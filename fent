@@ -3343,7 +3343,7 @@ do -- Visuals Tab
         -- Колорпикер для Fill Color с поддержкой transparency
         _targetHighlightToggle:Colorpicker({
             Name = "Fill Color",
-            Default = z(255, 255, 0),
+            Default = z(255, 255, 255),
             Alpha = 0.5, -- Включаем слайдер transparency
             Flag = "target_highlight_fill",
             Callback = function(color, alpha)
@@ -3366,7 +3366,7 @@ do -- Visuals Tab
         -- Колорпикер для Outline Color с поддержкой transparency
         _targetHighlightToggle:Colorpicker({
             Name = "Outline Color", 
-            Default = z(0, 0, 0),
+            Default = z(255, 255, 255),
             Alpha = 0.5, -- Включаем слайдер transparency
             Flag = "target_highlight_outline",
             Callback = function(color, alpha)
@@ -3423,7 +3423,7 @@ do -- Visuals Tab
         -- Circle Color 1
         _targetCircleToggle:Colorpicker({
             Name = "Color 1",
-            Default = z(128, 18, 255),
+            Default = z(255, 255, 255),
             Flag = "circle_color1",
             Callback = function(color)
                 if _G.CircleFramework then
@@ -3435,7 +3435,7 @@ do -- Visuals Tab
         -- Circle Color 2
         _targetCircleToggle:Colorpicker({
             Name = "Color 2",
-            Default = z(255, 0, 128),
+            Default = z(255, 255, 255),
             Flag = "circle_color2",
             Callback = function(color)
                 if _G.CircleFramework then
@@ -3447,7 +3447,7 @@ do -- Visuals Tab
         -- Circle Color 3
         _targetCircleToggle:Colorpicker({
             Name = "Color 3",
-            Default = z(0, 200, 255),
+            Default = z(255, 255, 255),
             Flag = "circle_color3",
             Callback = function(color)
                 if _G.CircleFramework then
@@ -3459,7 +3459,7 @@ do -- Visuals Tab
         -- Circle Color 4
         _targetCircleToggle:Colorpicker({
             Name = "Color 4",
-            Default = z(255, 255, 0),
+            Default = z(255, 255, 255),
             Flag = "circle_color4",
             Callback = function(color)
                 if _G.CircleFramework then
@@ -3510,7 +3510,7 @@ do -- Visuals Tab
         -- Snapline Outline Color
         _targetSnaplineToggle:Colorpicker({
             Name = "Outline Color",
-            Default = z(0, 0, 0),
+            Default = z(255, 255, 255),
             Alpha = 1.0,
             Flag = "snapline_outline_color",
             Callback = function(color, alpha)
@@ -3541,7 +3541,7 @@ do -- Visuals Tab
         -- Chams Color Picker
         _chamsToggle:Colorpicker({
             Name = "Color",
-            Default = z(255, 0, 0),
+            Default = z(255, 255, 255),
             Alpha = 0.0,
             Flag = "hit_chams_color",
             Callback = function(color, alpha)
@@ -4014,7 +4014,7 @@ do -- Visuals Tab
         -- Local Highlight Fill Color Picker
         _localHighlightToggle:Colorpicker({
             Name = "Fill Color",
-            Default = z(255, 255, 0),
+            Default = z(255, 255, 255),
             Alpha = 0.5,
             Flag = "local_highlight_fill",
             Callback = function(color, alpha)
@@ -4030,7 +4030,7 @@ do -- Visuals Tab
         -- Local Highlight Outline Color Picker
         _localHighlightToggle:Colorpicker({
             Name = "Outline Color",
-            Default = z(0, 0, 0),
+            Default = z(255, 255, 255),
             Alpha = 0.5,
             Flag = "local_highlight_outline",
             Callback = function(color, alpha)
@@ -4383,7 +4383,7 @@ do -- Visuals Tab
         -- Bullet Tracers Color Picker 2
         _bulletTracersToggle:Colorpicker({
             Name = "End Color",
-            Default = z(255, 0, 0),
+            Default = z(255, 255, 255),
             Flag = "bullet_tracers_color2",
             Callback = function(color)
                 bullet_tracers_state.color2 = color
@@ -5252,7 +5252,7 @@ do -- Visuals Tab
         -- Aura Colorpicker
         auraToggle:Colorpicker({
             Name = "Aura Color",
-            Default = z(31, 226, 130), -- Зеленоватый цвет по умолчанию
+            Default = z(255, 255, 255), -- Белый цвет по умолчанию
             Flag = "aura_color",
             Callback = function(value)
                 aura_utility:updateColor(value)
@@ -5455,7 +5455,7 @@ do -- Visuals Tab
         -- Halo Colorpicker
         haloToggle:Colorpicker({
             Name = "Halo Color",
-            Default = z(255, 225, 0), -- Золотой цвет по умолчанию
+            Default = z(255, 255, 255), -- Белый цвет по умолчанию
             Flag = "halo_color",
             Callback = function(value)
                 halo_utility:updateColor(value)
@@ -5989,7 +5989,7 @@ do -- Visuals Tab
         -- Wings Colorpicker
         wingsToggle:Colorpicker({
             Name = "Wings Color",
-            Default = z(255, 0, 0), -- Красный цвет по умолчанию
+            Default = z(255, 255, 255), -- Белый цвет по умолчанию
             Flag = "wings_color",
             Callback = function(value)
                 wings_utility:updateColor(value)
@@ -6200,7 +6200,7 @@ do -- Visuals Tab
         -- Trail Colorpicker
         trailToggle:Colorpicker({
             Name = "Trail Color",
-            Default = z(255, 0, 0), -- Красный цвет по умолчанию
+            Default = z(255, 255, 255), -- Белый цвет по умолчанию
             Flag = "trail_color",
             Callback = function(value)
                 trail_utility:updateColor(value)
@@ -6867,7 +6867,7 @@ do -- Visuals Tab
         -- Колорпикер для Color
         _atmosphereToggle:Colorpicker({
             Name = "Color",
-            Default = z(199, 199, 199),
+            Default = z(255, 255, 255),
             Flag = "world_atmosphere_color",
             Callback = function(color)
                 atmosphere_utility:updateColor(color)
@@ -6877,7 +6877,7 @@ do -- Visuals Tab
         -- Колорпикер для Decay
         _atmosphereToggle:Colorpicker({
             Name = "Decay",
-            Default = z(92, 60, 13),
+            Default = z(255, 255, 255),
             Flag = "world_atmosphere_decay",
             Callback = function(color)
                 atmosphere_utility:updateDecay(color)
@@ -7734,6 +7734,353 @@ do -- Misc Tab
                         fly_utility:stopFly()
                     end
                 end
+            end
+        })
+    end
+    
+    do -- Main Section
+        local MainSection = MiscPage:Section({Name = "Main", Side = 2})
+        
+        -- AntiVoid utility
+        local antivoid_utility = {}
+        local antivoid_state = {
+            enabled = false,
+            original_height = nil
+        }
+        
+        function antivoid_utility:enable()
+            if not antivoid_state.enabled then
+                antivoid_state.original_height = workspace.FallenPartsDestroyHeight
+                workspace.FallenPartsDestroyHeight = 0/0
+                antivoid_state.enabled = true
+            end
+        end
+        
+        function antivoid_utility:disable()
+            if antivoid_state.enabled then
+                if antivoid_state.original_height then
+                    workspace.FallenPartsDestroyHeight = antivoid_state.original_height
+                end
+                antivoid_state.enabled = false
+            end
+        end
+        
+        -- AntiSeats utility
+        local antiseats_utility = {}
+        local antiseats_state = {
+            enabled = false,
+            connection = nil,
+            removed_seats = {}
+        }
+        
+        function antiseats_utility:removeSeat(seat)
+            if seat and seat.Parent then
+                table.insert(antiseats_state.removed_seats, {
+                    seat = seat,
+                    parent = seat.Parent,
+                    position = seat.CFrame
+                })
+                seat:Destroy()
+            end
+        end
+        
+        function antiseats_utility:removeAllSeats()
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("Seat") or obj:IsA("VehicleSeat") then
+                    self:removeSeat(obj)
+                end
+            end
+        end
+        
+        function antiseats_utility:enable()
+            if not antiseats_state.enabled then
+                antiseats_state.enabled = true
+                
+                -- Удаляем все существующие сиденья
+                self:removeAllSeats()
+                
+                -- Следим за новыми сиденьями
+                antiseats_state.connection = workspace.DescendantAdded:Connect(function(obj)
+                    if antiseats_state.enabled and (obj:IsA("Seat") or obj:IsA("VehicleSeat")) then
+                        wait(0.1) -- Небольшая задержка для стабильности
+                        self:removeSeat(obj)
+                    end
+                end)
+            end
+        end
+        
+        function antiseats_utility:disable()
+            if antiseats_state.enabled then
+                antiseats_state.enabled = false
+                
+                if antiseats_state.connection then
+                    antiseats_state.connection:Disconnect()
+                    antiseats_state.connection = nil
+                end
+                
+                -- Очищаем список удаленных сидений
+                antiseats_state.removed_seats = {}
+            end
+        end
+        
+        -- AntiVoid UI
+        local AntiVoidToggle = MainSection:Toggle({
+            Name = "AntiVoid",
+            Flag = "AntiVoidEnabled",
+            Default = false,
+            Callback = function(value)
+                if value then
+                    antivoid_utility:enable()
+                else
+                    antivoid_utility:disable()
+                end
+            end
+        })
+        
+        -- AntiSeats UI
+        local AntiSeatsToggle = MainSection:Toggle({
+            Name = "AntiSeats",
+            Flag = "AntiSeatsEnabled", 
+            Default = false,
+            Callback = function(value)
+                if value then
+                    antiseats_utility:enable()
+                else
+                    antiseats_utility:disable()
+                end
+            end
+        })
+    end
+    
+    do -- Fun Section
+        local FunSection = MiscPage:Section({Name = "Fun", Side = 2})
+        
+        -- YawManager utility
+        local yawmanager_utility = {}
+        local yawmanager_state = {
+            enabled = false,
+            mode = "Static",
+            angle = 90,
+            at_target = false,
+            disable_autorotate = true,
+            connection = nil,
+            jitter_state = 1,
+            jitter_timer = 0
+        }
+        
+        -- Получение углов для разных режимов
+        function yawmanager_utility:getYawAngles()
+            local temp_number = yawmanager_state.angle
+            if yawmanager_state.mode == 'Static' then
+                return {temp_number}
+            elseif yawmanager_state.mode == 'Jitter' then
+                return {temp_number, -temp_number}
+            elseif yawmanager_state.mode == '3 Ways' then
+                return {-temp_number, 0, temp_number}
+            elseif yawmanager_state.mode == '5 Ways' then
+                return {-temp_number, -temp_number/2, 0, temp_number/2, temp_number}
+            elseif yawmanager_state.mode == 'Spin' then
+                return {temp_number}
+            end
+            return {temp_number}
+        end
+        
+        -- Применение AutoRotate настройки
+        function yawmanager_utility:applyAutoRotate()
+            local char = g.Character
+            if char then
+                local hum = char:FindFirstChildOfClass('Humanoid')
+                if hum then
+                    hum.AutoRotate = not yawmanager_state.disable_autorotate
+                end
+            end
+        end
+        
+        function yawmanager_utility:enable()
+            yawmanager_state.enabled = true
+            if yawmanager_state.connection then
+                yawmanager_state.connection:Disconnect()
+                yawmanager_state.connection = nil
+            end
+            yawmanager_state.jitter_state = 1
+            yawmanager_state.jitter_timer = 0
+            self:applyAutoRotate()
+            
+            yawmanager_state.connection = b.RenderStepped:Connect(function(dt)
+                local char = g.Character
+                if not char then return end
+                local root = char:FindFirstChild('HumanoidRootPart')
+                if not root then return end
+                
+                local my_pos = root.Position
+                local look_vector = nil
+                
+                if yawmanager_state.at_target then
+                    -- Режим AtTarget - поворот к цели
+                    local target = _G.TargetingFramework and _G.TargetingFramework:GetCurrentTarget()
+                    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                        local target_hrp = target.Character.HumanoidRootPart
+                        local direction_to_target = (target_hrp.Position - my_pos)
+                        local base_yaw = math.atan2(direction_to_target.X, direction_to_target.Z)
+                        
+                        local angles = self:getYawAngles()
+                        local final_yaw = nil
+                        
+                        if yawmanager_state.mode == 'Jitter' then
+                            yawmanager_state.jitter_timer = yawmanager_state.jitter_timer + dt
+                            if yawmanager_state.jitter_timer > 0.1 then
+                                yawmanager_state.jitter_state = 3 - yawmanager_state.jitter_state -- 1 <-> 2
+                                yawmanager_state.jitter_timer = 0
+                            end
+                            final_yaw = base_yaw + math.rad(angles[yawmanager_state.jitter_state])
+                        elseif yawmanager_state.mode == '3 Ways' then
+                            yawmanager_state.jitter_timer = yawmanager_state.jitter_timer + dt
+                            if yawmanager_state.jitter_timer > 0.15 then
+                                yawmanager_state.jitter_state = yawmanager_state.jitter_state % 3 + 1
+                                yawmanager_state.jitter_timer = 0
+                            end
+                            final_yaw = base_yaw + math.rad(angles[yawmanager_state.jitter_state])
+                        elseif yawmanager_state.mode == '5 Ways' then
+                            yawmanager_state.jitter_timer = yawmanager_state.jitter_timer + dt
+                            if yawmanager_state.jitter_timer > 0.12 then
+                                yawmanager_state.jitter_state = yawmanager_state.jitter_state % 5 + 1
+                                yawmanager_state.jitter_timer = 0
+                            end
+                            final_yaw = base_yaw + math.rad(angles[yawmanager_state.jitter_state])
+                        elseif yawmanager_state.mode == 'Spin' then
+                            yawmanager_state.jitter_timer = yawmanager_state.jitter_timer + dt * 5 -- скорость вращения
+                            final_yaw = base_yaw + yawmanager_state.jitter_timer
+                        else -- Static
+                            final_yaw = base_yaw + math.rad(angles[1])
+                        end
+                        
+                        look_vector = B(math.sin(final_yaw), 0, math.cos(final_yaw))
+                    end
+                else
+                    -- Режим не AtTarget - обычный поворот
+                    local angles = self:getYawAngles()
+                    local yaw = nil
+                    
+                    if yawmanager_state.mode == 'Static' then
+                        yaw = math.rad(angles[1])
+                    elseif yawmanager_state.mode == 'Jitter' then
+                        yawmanager_state.jitter_timer = yawmanager_state.jitter_timer + dt
+                        if yawmanager_state.jitter_timer > 0.1 then
+                            yawmanager_state.jitter_state = 3 - yawmanager_state.jitter_state -- 1 <-> 2
+                            yawmanager_state.jitter_timer = 0
+                        end
+                        yaw = math.rad(angles[yawmanager_state.jitter_state])
+                    elseif yawmanager_state.mode == '3 Ways' then
+                        yawmanager_state.jitter_timer = yawmanager_state.jitter_timer + dt
+                        if yawmanager_state.jitter_timer > 0.15 then
+                            yawmanager_state.jitter_state = yawmanager_state.jitter_state % 3 + 1
+                            yawmanager_state.jitter_timer = 0
+                        end
+                        yaw = math.rad(angles[yawmanager_state.jitter_state])
+                    elseif yawmanager_state.mode == '5 Ways' then
+                        yawmanager_state.jitter_timer = yawmanager_state.jitter_timer + dt
+                        if yawmanager_state.jitter_timer > 0.12 then
+                            yawmanager_state.jitter_state = yawmanager_state.jitter_state % 5 + 1
+                            yawmanager_state.jitter_timer = 0
+                        end
+                        yaw = math.rad(angles[yawmanager_state.jitter_state])
+                    elseif yawmanager_state.mode == 'Spin' then
+                        yawmanager_state.jitter_timer = yawmanager_state.jitter_timer + dt * 5 -- скорость вращения
+                        yaw = yawmanager_state.jitter_timer
+                    else
+                        yaw = math.rad(yawmanager_state.angle)
+                    end
+                    look_vector = B(math.sin(yaw), 0, math.cos(yaw))
+                end
+                
+                if look_vector then
+                    root.CFrame = C(my_pos, my_pos + look_vector)
+                end
+            end)
+        end
+        
+        function yawmanager_utility:disable()
+            yawmanager_state.enabled = false
+            if yawmanager_state.connection then
+                yawmanager_state.connection:Disconnect()
+                yawmanager_state.connection = nil
+            end
+            yawmanager_state.jitter_state = 1
+            yawmanager_state.jitter_timer = 0
+            self:applyAutoRotate()
+        end
+        
+        function yawmanager_utility:setMode(mode)
+            yawmanager_state.mode = mode
+            yawmanager_state.jitter_state = 1
+            yawmanager_state.jitter_timer = 0
+        end
+        
+        function yawmanager_utility:setAngle(angle)
+            yawmanager_state.angle = angle
+        end
+        
+        function yawmanager_utility:setAtTarget(value)
+            yawmanager_state.at_target = value
+        end
+        
+        function yawmanager_utility:setDisableAutoRotate(value)
+            yawmanager_state.disable_autorotate = value
+            if yawmanager_state.enabled then
+                self:applyAutoRotate()
+            end
+        end
+        
+        -- YawManager UI Elements
+        local YawManagerToggle = FunSection:Toggle({
+            Name = "YawManager",
+            Flag = "YawManagerEnabled",
+            Default = false,
+            Callback = function(value)
+                if value then
+                    yawmanager_utility:enable()
+                else
+                    yawmanager_utility:disable()
+                end
+            end
+        })
+        
+        local YawModeDropdown = FunSection:Dropdown({
+            Name = "Yaw Mode",
+            Flag = "YawMode",
+            Default = "Static",
+            Items = {"Static", "Jitter", "3 Ways", "5 Ways", "Spin"},
+            Callback = function(value)
+                yawmanager_utility:setMode(value)
+            end
+        })
+        
+        local YawAngleSlider = FunSection:Slider({
+            Name = "Yaw Angle",
+            Flag = "YawAngle",
+            Min = -180,
+            Max = 180,
+            Default = 90,
+            Callback = function(value)
+                yawmanager_utility:setAngle(value)
+            end
+        })
+        
+        local AtTargetToggle = FunSection:Toggle({
+            Name = "At Target",
+            Flag = "YawAtTarget",
+            Default = false,
+            Callback = function(value)
+                yawmanager_utility:setAtTarget(value)
+            end
+        })
+        
+        local DisableAutoRotateToggle = FunSection:Toggle({
+            Name = "Disable AutoRotate",
+            Flag = "YawDisableAutoRotate",
+            Default = true,
+            Callback = function(value)
+                yawmanager_utility:setDisableAutoRotate(value)
             end
         })
     end
