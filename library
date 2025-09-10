@@ -57,7 +57,7 @@ local Library do
     Library = {
         Flags = { },
 
-        MenuKeybind = tostring(Enum.KeyCode.Insert), 
+        MenuKeybind = tostring(Enum.KeyCode.RightControl), 
 
         Tween = {
             Time = 0.25,
