@@ -5516,6 +5516,199 @@ do -- Visuals Tab
             end
         })
         
+        -- Skybox utility
+        local skybox_utility = {}
+        local skybox_state = {
+            enabled = false,
+            current_type = "Galaxy",
+            original_skybox = nil,
+            custom_skybox = nil,
+            lighting = nil
+        }
+        
+        -- Skybox presets
+        local skybox_presets = {
+            ["Galaxy"] = {
+                SkyboxBk = "rbxassetid://15983968922",
+                SkyboxDn = "rbxassetid://15983966825",
+                SkyboxFt = "rbxassetid://15983965025",
+                SkyboxLf = "rbxassetid://15983967420",
+                SkyboxRt = "rbxassetid://15983966246",
+                SkyboxUp = "rbxassetid://15983964246",
+                StarCount = 0,
+                CelestialBodiesShown = true
+            },
+            ["SpongeBob"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxDn = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxFt = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxLf = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxRt = "http://www.roblox.com/asset/?id=7633178166",
+                SkyboxUp = "http://www.roblox.com/asset/?id=7633178166",
+                StarCount = 0,
+                CelestialBodiesShown = true,
+                MoonTextureId = "http://www.roblox.com/asset/?id=7633178166"
+            },
+            ["Blue"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=16876760844",
+                SkyboxDn = "http://www.roblox.com/asset/?id=16876762818",
+                SkyboxFt = "http://www.roblox.com/asset/?id=16876765234",
+                SkyboxLf = "http://www.roblox.com/asset/?id=16876767659",
+                SkyboxRt = "http://www.roblox.com/asset/?id=16876769447",
+                SkyboxUp = "http://www.roblox.com/asset/?id=16876771721",
+                StarCount = 0,
+                CelestialBodiesShown = false
+            },
+            ["Red"] = {
+                SkyboxBk = "http://www.roblox.com/asset/?id=570555736",
+                SkyboxDn = "http://www.roblox.com/asset/?id=570555964",
+                SkyboxFt = "http://www.roblox.com/asset/?id=570555800",
+                SkyboxLf = "http://www.roblox.com/asset/?id=570555840",
+                SkyboxRt = "http://www.roblox.com/asset/?id=570555882",
+                SkyboxUp = "http://www.roblox.com/asset/?id=570555929",
+                StarCount = 0,
+                CelestialBodiesShown = false
+            }
+        }
+        
+        -- Функция инициализации Skybox
+        function skybox_utility:init()
+            skybox_state.lighting = game:GetService("Lighting")
+            
+            -- Сохраняем оригинальный skybox
+            local existingSkybox = skybox_state.lighting:FindFirstChildOfClass("Sky")
+            if existingSkybox then
+                skybox_state.original_skybox = {
+                    SkyboxBk = existingSkybox.SkyboxBk,
+                    SkyboxDn = existingSkybox.SkyboxDn,
+                    SkyboxFt = existingSkybox.SkyboxFt,
+                    SkyboxLf = existingSkybox.SkyboxLf,
+                    SkyboxRt = existingSkybox.SkyboxRt,
+                    SkyboxUp = existingSkybox.SkyboxUp,
+                    StarCount = existingSkybox.StarCount,
+                    CelestialBodiesShown = existingSkybox.CelestialBodiesShown,
+                    MoonTextureId = existingSkybox.MoonTextureId,
+                    SunTextureId = existingSkybox.SunTextureId,
+                    MoonAngularSize = existingSkybox.MoonAngularSize,
+                    SunAngularSize = existingSkybox.SunAngularSize
+                }
+            end
+        end
+        
+        -- Функция применения skybox
+        function skybox_utility:applySkybox()
+            if not skybox_state.lighting then
+                self:init()
+            end
+            
+            local skybox = skybox_state.lighting:FindFirstChildOfClass("Sky")
+            if not skybox then
+                skybox = Instance.new("Sky")
+                skybox.Parent = skybox_state.lighting
+            end
+            
+            if skybox_state.enabled then
+                local preset = skybox_presets[skybox_state.current_type]
+                if preset then
+                    -- Применяем настройки из пресета
+                    skybox.SkyboxBk = preset.SkyboxBk
+                    skybox.SkyboxDn = preset.SkyboxDn
+                    skybox.SkyboxFt = preset.SkyboxFt
+                    skybox.SkyboxLf = preset.SkyboxLf
+                    skybox.SkyboxRt = preset.SkyboxRt
+                    skybox.SkyboxUp = preset.SkyboxUp
+                    skybox.StarCount = preset.StarCount or 3000
+                    skybox.CelestialBodiesShown = preset.CelestialBodiesShown
+                    
+                    -- Специальные настройки для некоторых пресетов
+                    if preset.MoonTextureId then
+                        skybox.MoonTextureId = preset.MoonTextureId
+                    else
+                        skybox.MoonTextureId = "rbxasset://sky/moon.jpg"
+                    end
+                    
+                    if preset.SunTextureId then
+                        skybox.SunTextureId = preset.SunTextureId
+                    else
+                        skybox.SunTextureId = "rbxasset://sky/sun.jpg"
+                    end
+                end
+            else
+                -- Восстанавливаем оригинальный skybox
+                if skybox_state.original_skybox then
+                    skybox.SkyboxBk = skybox_state.original_skybox.SkyboxBk
+                    skybox.SkyboxDn = skybox_state.original_skybox.SkyboxDn
+                    skybox.SkyboxFt = skybox_state.original_skybox.SkyboxFt
+                    skybox.SkyboxLf = skybox_state.original_skybox.SkyboxLf
+                    skybox.SkyboxRt = skybox_state.original_skybox.SkyboxRt
+                    skybox.SkyboxUp = skybox_state.original_skybox.SkyboxUp
+                    skybox.StarCount = skybox_state.original_skybox.StarCount
+                    skybox.CelestialBodiesShown = skybox_state.original_skybox.CelestialBodiesShown
+                    skybox.MoonTextureId = skybox_state.original_skybox.MoonTextureId
+                    skybox.SunTextureId = skybox_state.original_skybox.SunTextureId
+                    skybox.MoonAngularSize = skybox_state.original_skybox.MoonAngularSize
+                    skybox.SunAngularSize = skybox_state.original_skybox.SunAngularSize
+                end
+            end
+        end
+        
+        -- Функция изменения типа skybox
+        function skybox_utility:changeType(type)
+            skybox_state.current_type = type
+            if skybox_state.enabled then
+                self:applySkybox()
+            end
+        end
+        
+        -- Функция включения/выключения
+        function skybox_utility:setEnabled(enabled)
+            skybox_state.enabled = enabled
+            self:applySkybox()
+        end
+        
+        -- Функция очистки
+        function skybox_utility:cleanup()
+            if skybox_state.original_skybox and skybox_state.lighting then
+                local skybox = skybox_state.lighting:FindFirstChildOfClass("Sky")
+                if skybox then
+                    skybox.SkyboxBk = skybox_state.original_skybox.SkyboxBk
+                    skybox.SkyboxDn = skybox_state.original_skybox.SkyboxDn
+                    skybox.SkyboxFt = skybox_state.original_skybox.SkyboxFt
+                    skybox.SkyboxLf = skybox_state.original_skybox.SkyboxLf
+                    skybox.SkyboxRt = skybox_state.original_skybox.SkyboxRt
+                    skybox.SkyboxUp = skybox_state.original_skybox.SkyboxUp
+                    skybox.StarCount = skybox_state.original_skybox.StarCount
+                    skybox.CelestialBodiesShown = skybox_state.original_skybox.CelestialBodiesShown
+                    skybox.MoonTextureId = skybox_state.original_skybox.MoonTextureId
+                    skybox.SunTextureId = skybox_state.original_skybox.SunTextureId
+                end
+            end
+        end
+        
+        -- Инициализируем skybox утилиту
+        skybox_utility:init()
+        
+        -- Создаем UI элементы для Skybox
+        local _skyboxToggle = worldSection:Toggle({
+            Name = "Skybox",
+            Default = false,
+            Flag = "world_skybox",
+            Callback = function(value)
+                skybox_utility:setEnabled(value)
+            end
+        })
+        
+        -- Дропдаун для выбора типа skybox
+        worldSection:Dropdown({
+            Name = "Skybox Type",
+            Items = {"Galaxy", "SpongeBob", "Blue", "Red"},
+            Default = "Galaxy",
+            Flag = "world_skybox_type",
+            Callback = function(value)
+                skybox_utility:changeType(value)
+            end
+        })
+        
         -- Color Correction utility
         local color_correction_utility = {}
         local color_correction_state = {
@@ -5854,19 +6047,140 @@ do -- Visuals Tab
             end
         })
         
+        -- Time utility
+        local time_utility = {}
+        local time_state = {
+            enabled = false,
+            hours = 12,
+            minutes = 0,
+            lighting = nil,
+            update_connection = nil
+        }
+        
+        -- Функция инициализации Time
+        function time_utility:init()
+            time_state.lighting = game:GetService("Lighting")
+        end
+        
+        -- Функция применения времени
+        function time_utility:applyTime()
+            if not time_state.lighting then
+                self:init()
+            end
+            
+            if time_state.enabled then
+                -- Отключаем предыдущее соединение если есть
+                if time_state.update_connection then
+                    time_state.update_connection:Disconnect()
+                    time_state.update_connection = nil
+                end
+                
+                -- Создаем соединение для постоянного обновления времени
+                time_state.update_connection = b.Heartbeat:Connect(function()
+                    if time_state.lighting then
+                        -- Конвертируем часы и минуты в формат ClockTime
+                        local clockTime = time_state.hours + (time_state.minutes / 60)
+                        time_state.lighting.ClockTime = clockTime
+                    end
+                end)
+            else
+                -- Отключаем обновление времени
+                if time_state.update_connection then
+                    time_state.update_connection:Disconnect()
+                    time_state.update_connection = nil
+                end
+            end
+        end
+        
+        -- Функция обновления часов
+        function time_utility:updateHours(value)
+            time_state.hours = value
+            if time_state.enabled and time_state.lighting then
+                local clockTime = time_state.hours + (time_state.minutes / 60)
+                time_state.lighting.ClockTime = clockTime
+            end
+        end
+        
+        -- Функция обновления минут
+        function time_utility:updateMinutes(value)
+            time_state.minutes = value
+            if time_state.enabled and time_state.lighting then
+                local clockTime = time_state.hours + (time_state.minutes / 60)
+                time_state.lighting.ClockTime = clockTime
+            end
+        end
+        
+        -- Функция включения/выключения
+        function time_utility:setEnabled(enabled)
+            time_state.enabled = enabled
+            self:applyTime()
+        end
+        
+        -- Функция очистки
+        function time_utility:cleanup()
+            if time_state.update_connection then
+                time_state.update_connection:Disconnect()
+                time_state.update_connection = nil
+            end
+        end
+        
+        -- Инициализируем time утилиту
+        time_utility:init()
+        
+        -- Создаем UI элементы для Time
+        local _timeToggle = worldSection:Toggle({
+            Name = "Time",
+            Default = false,
+            Flag = "world_time",
+            Callback = function(value)
+                time_utility:setEnabled(value)
+            end
+        })
+        
+        -- Слайдер для Hours
+        worldSection:Slider({
+            Name = "Hours",
+            Min = 0,
+            Max = 23,
+            Default = 12,
+            Decimals = 1,
+            Flag = "world_time_hours",
+            Callback = function(value)
+                time_utility:updateHours(value)
+            end
+        })
+        
+        -- Слайдер для Minutes
+        worldSection:Slider({
+            Name = "Minutes",
+            Min = 0,
+            Max = 59,
+            Default = 0,
+            Decimals = 1,
+            Flag = "world_time_minutes",
+            Callback = function(value)
+                time_utility:updateMinutes(value)
+            end
+        })
+        
         -- Обработчики очистки при выходе
         g.CharacterRemoving:Connect(function()
             ambient_utility:restoreDefaults()
             tint_utility:cleanup()
+            skybox_utility:cleanup()
             color_correction_utility:cleanup()
             atmosphere_utility:cleanup()
+            time_utility:cleanup()
         end)
         
         -- Сохраняем утилиты в глобальную область
         _G.AmbientUtility = ambient_utility
         _G.TintUtility = tint_utility
+        _G.SkyboxUtility = skybox_utility
         _G.ColorCorrectionUtility = color_correction_utility
         _G.AtmosphereUtility = atmosphere_utility
+        _G.TimeUtility = time_utility
+        
     end
     
 end -- End Visuals Tab
